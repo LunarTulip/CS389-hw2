@@ -190,7 +190,7 @@ int main(int argc, char** argv) {
 	while(true) {
 		request_total += 1;
 		Socket open_socket;
-		printf("starting poll #%d\n", request_total);
+		// printf("starting poll #%d\n", request_total);
 		poll(file_descs, file_desc_size, -1);
 		bool is_udp = false;
 		if(tcp_fd->revents == POLLIN) {
