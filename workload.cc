@@ -4,12 +4,23 @@
 #include <unistd.h>
 #include <ctime>
 #include <math.h>
+#include <pthread.h>
 #include "cache.h"
 #include "random.hh"
 
 using uint = unsigned int;
 
 constexpr double PI = 3.14159265358979323846;
+
+pthread_mutex_t requestTimeMutex;
+volatile clock_t totalRequestTime = 0;
+
+struct requestArgs {
+	cache_type cache;
+	key_type key;
+	val_type value;
+	uint32_t valueSize;
+};
 
 double _r_norm0;
 double _r_norm1;
@@ -57,7 +68,7 @@ char* get_string_or_null(char** strings, uint strings_size) {
 
 
 
-constexpr uint MAX_STRING_SIZE = 1000;
+constexpr uint MAX_STRING_SIZE = 500;
 constexpr uint SET_KEY_SIZE = 100;
 
 double get_network_latency(cache_obj* cache, uint iterations) {
@@ -69,6 +80,27 @@ double get_network_latency(cache_obj* cache, uint iterations) {
 	clock_t cur_time = clock();
 
 	return (((double)(cur_time - pre_time))/iterations)/CLOCKS_PER_SEC;
+}
+
+void* time_get(void* args) {
+	requestArgs* argsAsStruct = static_cast<requestArgs*>(args);
+	clock_t before = 0;
+	clock_t after = 0;
+	before = clock();
+	const void* value = cache_get(argsAsStruct->cache, argsAsStruct->key, &(argsAsStruct->valueSize));
+	after = clock();
+
+	pthread_mutex_lock(&requestTimeMutex);
+	totalRequestTime += (after - before);
+	pthread_mutex_unlock(&requestTimeMutex);
+
+	delete[] argsAsStruct->key;
+	delete[] argsAsStruct;
+	if(value) {
+		delete[] static_cast<const char*>(value);
+	}
+
+	pthread_exit(NULL);
 }
 
 bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size, uint std_string_size, uint total_requests) {
@@ -89,6 +121,8 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 	clock_t cur_request_time = 0;
 
 	uint overflow = 0;
+
+	pthread_t threads[total_requests];
 	for(uint i = 0; i < total_requests; i += 1) {
 		pre_sleep_time = clock();
 		double r = pcg_random_uniform();
@@ -104,12 +138,14 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 				key = buffer;
 			}
 			uint value_size;
-			pre_request_time = clock();
-			const void* value = cache_get(cache, key, &value_size);
-			cur_request_time = clock();
-			if(value) {
-				delete[] (char*)value;
-			}
+			requestArgs args = {cache, key, NULL, value_size};
+			int threadSuccess = pthread_create(&(threads[i]), NULL, time_get, static_cast<void *>(&args));
+			// pre_request_time = clock();
+			// const void* value = cache_get(cache, key, &value_size);
+			// cur_request_time = clock();
+			// if(value) {
+			// 	delete[] (char*)value;
+			// }
 		} else if(r < .8) {//SET
 			double r_size = random_normal(mean_string_size, std_string_size);
 			uint key_size = static_cast<uint>(r_size*r_size + 2);
@@ -136,7 +172,7 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 				key = buffer;
 			}
 			pre_request_time = clock();
-			cache_delete(cache, buffer);
+			cache_delete(cache, key);
 			cur_request_time = clock();
 		}
 		total_request_time += cur_request_time - pre_request_time;

@@ -24,7 +24,7 @@ cache_test:
 	./test;
 
 workload:
-	$(CPP) -g cache.h client.cc workload.cc random.hh -o benchmark;
+	$(CPP) -g cache.h client.cc workload.cc random.hh -lpthread -o benchmark;
 	./benchmark;
 
 clean:
