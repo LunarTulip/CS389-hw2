@@ -12,7 +12,7 @@ cache:
 	gdb ./test;
 
 cache_server:
-	$(CPP) -g types.h book.h cache.cc eviction.cc -o server server.cc;
+	$(CPP) -O3 types.h book.h cache.cc eviction.cc -o server server.cc;
 	./server;
 
 cache_client:
@@ -24,7 +24,7 @@ cache_test:
 	./test;
 
 workload:
-	$(CPP) -g cache.h client.cc workload.cc random.hh -lpthread -o benchmark;
+	$(CPP) -O3 cache.h client.cc workload.cc random.hh -lpthread -o benchmark;
 	./benchmark;
 
 clean:

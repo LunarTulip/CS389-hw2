@@ -5,7 +5,7 @@
 #include <ctime>
 #include <math.h>
 #include <string.h>
-// #include <pthread.h>
+#include <pthread.h>
 #include "cache.h"
 #include "random.hh"
 
@@ -15,6 +15,9 @@ constexpr double PI = 3.14159265358979323846;
 
 pthread_mutex_t requestTimeMutex;
 volatile clock_t totalRequestTime = 0;
+
+// pthread_mutex_t threadCountMutex;
+// volatile uint32_t threadNo = 1;
 
 struct requestArgs {
 	cache_type cache;
@@ -87,9 +90,15 @@ void* time_get(void* args) {
 	requestArgs* argsAsStruct = static_cast<requestArgs*>(args);
 	clock_t before = 0;
 	clock_t after = 0;
+
 	before = clock();
 	const void* value = cache_get(argsAsStruct->cache, argsAsStruct->key, &(argsAsStruct->valueSize));
 	after = clock();
+
+	// pthread_mutex_lock(&threadCountMutex);
+	// printf("Timed thread #%d\n", threadNo);
+	// threadNo++;
+	// pthread_mutex_unlock(&threadCountMutex);
 
 	pthread_mutex_lock(&requestTimeMutex);
 	totalRequestTime += (after - before);
@@ -100,6 +109,53 @@ void* time_get(void* args) {
 	if(value) {
 		delete[] static_cast<const char*>(value);
 	}
+
+	pthread_exit(NULL);
+}
+
+void* time_set(void* args) {
+	requestArgs* argsAsStruct = static_cast<requestArgs*>(args);
+	clock_t before = 0;
+	clock_t after = 0;
+
+	before = clock();
+	cache_set(argsAsStruct->cache, argsAsStruct->key, argsAsStruct->value, argsAsStruct->valueSize);
+	after = clock();
+
+	// pthread_mutex_lock(&threadCountMutex);
+	// printf("Timed thread #%d\n", threadNo);
+	// threadNo++;
+	// pthread_mutex_unlock(&threadCountMutex);
+
+	pthread_mutex_lock(&requestTimeMutex);
+	totalRequestTime += (after - before);
+	pthread_mutex_unlock(&requestTimeMutex);
+
+	delete[] argsAsStruct->key;
+	delete[] static_cast<const char*>(argsAsStruct->value);
+
+	pthread_exit(NULL);
+}
+
+void* time_delete(void* args) {
+	requestArgs* argsAsStruct = static_cast<requestArgs*>(args);
+	clock_t before = 0;
+	clock_t after = 0;
+
+	before = clock();
+	cache_delete(argsAsStruct->cache, argsAsStruct->key);
+	after = clock();
+
+	// pthread_mutex_lock(&threadCountMutex);
+	// printf("Timed thread #%d\n", threadNo);
+	// threadNo++;
+	// pthread_mutex_unlock(&threadCountMutex);
+
+	pthread_mutex_lock(&requestTimeMutex);
+	totalRequestTime += (after - before);
+	pthread_mutex_unlock(&requestTimeMutex);
+
+	delete[] argsAsStruct->key;
 
 	pthread_exit(NULL);
 }
@@ -115,15 +171,22 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 	clock_t time_per_request = CLOCKS_PER_SEC/requests_per_second;
 	clock_t pre_time = clock();
 	clock_t total_sleep_time = 0;
-	clock_t total_request_time = 0;
+	// clock_t total_request_time = 0;
 	clock_t pre_sleep_time = pre_time;
 	clock_t cur_sleep_time = 0;
 	clock_t pre_request_time = 0;
 	clock_t cur_request_time = 0;
 
+	totalRequestTime = 0;
+
 	uint overflow = 0;
 
 	pthread_t threads[total_requests];
+	pthread_attr_t joinable;
+	pthread_attr_init(&joinable);
+	pthread_attr_setdetachstate(&joinable, PTHREAD_CREATE_JOINABLE);
+	void* status;
+
 	for(uint i = 0; i < total_requests; i += 1) {
 		pre_sleep_time = clock();
 		double r = pcg_random_uniform();
@@ -144,8 +207,9 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 				generate_string(key, key_size);
 			}
 			uint value_size;
-			requestArgs args = {cache, key, NULL, value_size};
-			int threadSuccess = pthread_create(&(threads[i]), NULL, time_get, static_cast<void *>(&args));
+
+			requestArgs* args = new requestArgs{cache, key, NULL, value_size};
+			pthread_create(&(threads[i]), &joinable, time_get, static_cast<void*>(args));
 			// pre_request_time = clock();
 			// const void* value = cache_get(cache, key, &value_size);
 			// cur_request_time = clock();
@@ -166,10 +230,12 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 			auto value = new char[value_size];
 			generate_string(value, value_size);
 
-			pre_request_time = clock();
-			cache_set(cache, key, value, value_size);
-			cur_request_time = clock();
-			add_string(set_key, SET_KEY_SIZE, key_copy);
+			requestArgs* args = new requestArgs{cache, key, value, value_size};
+			pthread_create(&(threads[i]), &joinable, time_set, static_cast<void*>(args));
+			// pre_request_time = clock();
+			// cache_set(cache, key, value, value_size);
+			// cur_request_time = clock();
+			// add_string(set_key, SET_KEY_SIZE, key_copy);
 		} else {//DELETE
 			char* key = NULL;
 			if(r/.65 < .6) {
@@ -186,11 +252,15 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 				key = new char[key_size];
 				generate_string(key, key_size);
 			}
-			pre_request_time = clock();
-			cache_delete(cache, key);
-			cur_request_time = clock();
+
+			requestArgs* args = new requestArgs{cache, key, NULL, 0};
+			pthread_create(&(threads[i]), &joinable, time_delete, static_cast<void*>(args));
+			// pre_request_time = clock();
+			// cache_delete(cache, key);
+			// cur_request_time = clock();
 		}
-		total_request_time += cur_request_time - pre_request_time;
+		// total_request_time += cur_request_time - pre_request_time;
+
 
 		cur_sleep_time = clock();
 		int sleep_time = time_per_request - (cur_sleep_time - pre_sleep_time);
@@ -203,7 +273,11 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 			overflow += 1;
 		}
  	}
-	double average_time = (((double)(total_request_time))/CLOCKS_PER_SEC)/total_requests;
+	for (uint32_t i = 0; i < total_requests; i++) {
+		pthread_join(threads[i], &status);
+	}
+
+	double average_time = (((double)(totalRequestTime))/CLOCKS_PER_SEC)/total_requests;
 	bool is_valid = average_time < .001;
 
 	printf("Average time: %fms\n", 1e3*average_time);
@@ -224,12 +298,13 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 
 int main() {
 	auto cache = create_cache(0, NULL);
-	uint i = 10;
+	uint i = 20;
 	// while(true) {
 		// i = 6;
-		for(;i < 26; i += 1) {
-			printf("Starting %d\n", 1<<i);
-			bool is_valid = workload(cache, 1<<i, 250, 4, 10000);
+		for(;; i += 1) {
+			uint j = pow(2, (float)i/2);
+			printf("Starting %d\n", j);
+			bool is_valid = workload(cache, j, 25, 4, 5000);
 			if(!is_valid) break;
 			sleep(1);
 		}

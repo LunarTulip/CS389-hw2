@@ -99,7 +99,7 @@ char* readMessage(char* sourceBuffer, int sourceBufferLength) {
         messageStart++;
     }
 
-    char* messageStr = new char[sourceBufferLength - messageStart];
+    char* messageStr = new char[sourceBufferLength - messageStart]; //This produces a compiler error given -O3, but everything is still fine
     for (int i = 0; i < (sourceBufferLength - messageStart); i++) {
         messageStr[i] = sourceBuffer[i + messageStart];
     }
