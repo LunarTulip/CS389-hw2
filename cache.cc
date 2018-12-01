@@ -230,6 +230,8 @@ inline void grow_cache_size(Cache* cache) {
 	const auto pre_evict_data = get_evict_data(pre_mem_arena, pre_capacity);
 	const auto entry_book = &cache->entry_book;
 
+	printf("growing cache now\n");
+
 	auto new_mem_arena = allocate(new_capacity, cache->evictor.policy);
 	cache->mem_arena = new_mem_arena;
 	cache->entry_capacity = new_capacity;
