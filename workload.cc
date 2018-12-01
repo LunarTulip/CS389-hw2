@@ -4,7 +4,8 @@
 #include <unistd.h>
 #include <ctime>
 #include <math.h>
-#include <pthread.h>
+#include <string.h>
+// #include <pthread.h>
 #include "cache.h"
 #include "random.hh"
 
@@ -68,7 +69,7 @@ char* get_string_or_null(char** strings, uint strings_size) {
 
 
 
-constexpr uint MAX_STRING_SIZE = 500;
+// constexpr uint MAX_STRING_SIZE = 500;
 constexpr uint SET_KEY_SIZE = 100;
 
 double get_network_latency(cache_obj* cache, uint iterations) {
@@ -106,7 +107,7 @@ void* time_get(void* args) {
 bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size, uint std_string_size, uint total_requests) {
 	mean_string_size = sqrt(mean_string_size);
 	std_string_size = sqrt(std_string_size);
-	char buffer[MAX_STRING_SIZE] = {};
+	// char buffer[MAX_STRING_SIZE] = {};
 	char* set_key[SET_KEY_SIZE] = {};
 
 	// double network_latency = get_network_latency(cache, 20);
@@ -129,13 +130,18 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 		if(r < .65) {//GET
 			char* key = NULL;
 			if(r/.65 < .6) {
-				key = get_string_or_null(set_key, SET_KEY_SIZE);
+				char* key_copy = get_string_or_null(set_key, SET_KEY_SIZE);
+				if(key_copy) {
+					uint key_size = strlen(key_copy) + 1;
+					key = new char[key_size];
+					memcpy(key, key_copy, key_size);
+				}
 			}
 			if(!key) {
 				double r_size = random_normal(mean_string_size, std_string_size);
-				uint key_size = min(MAX_STRING_SIZE, static_cast<uint>(r_size*r_size + 2));
-				generate_string(buffer, key_size);
-				key = buffer;
+				uint key_size = static_cast<uint>(r_size*r_size + 2);
+				key = new char[key_size];
+				generate_string(key, key_size);
 			}
 			uint value_size;
 			requestArgs args = {cache, key, NULL, value_size};
@@ -149,27 +155,36 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 		} else if(r < .8) {//SET
 			double r_size = random_normal(mean_string_size, std_string_size);
 			uint key_size = static_cast<uint>(r_size*r_size + 2);
+
 			char* key = new char[key_size];
 			generate_string(key, key_size);
+			char* key_copy = new char[key_size];
+			memcpy(key_copy, key, key_size);
 
 			double r_value_size = random_normal(mean_string_size, std_string_size);
-			uint value_size = min(MAX_STRING_SIZE, static_cast<uint>(r_value_size*r_value_size + 2));
-			auto value = &buffer[key_size];
+			uint value_size = static_cast<uint>(r_value_size*r_value_size + 2);
+			auto value = new char[value_size];
 			generate_string(value, value_size);
 
 			pre_request_time = clock();
 			cache_set(cache, key, value, value_size);
 			cur_request_time = clock();
-			add_string(set_key, SET_KEY_SIZE, key);
+			add_string(set_key, SET_KEY_SIZE, key_copy);
 		} else {//DELETE
-			char* key;
-			if((r - .7)/.3 < .05) {
-				key = get_string_or_null(set_key, SET_KEY_SIZE);
-			} else {
+			char* key = NULL;
+			if(r/.65 < .6) {
+				char* key_copy = get_string_or_null(set_key, SET_KEY_SIZE);
+				if(key_copy) {
+					uint key_size = strlen(key_copy) + 1;
+					key = new char[key_size];
+					memcpy(key, key_copy, key_size);
+				}
+			}
+			if(!key) {
 				double r_size = random_normal(mean_string_size, std_string_size);
-				uint key_size = min(MAX_STRING_SIZE, static_cast<uint>(r_size*r_size + 2));
-				generate_string(buffer, key_size);
-				key = buffer;
+				uint key_size = static_cast<uint>(r_size*r_size + 2);
+				key = new char[key_size];
+				generate_string(key, key_size);
 			}
 			pre_request_time = clock();
 			cache_delete(cache, key);
