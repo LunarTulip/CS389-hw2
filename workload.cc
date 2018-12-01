@@ -77,7 +77,7 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 	char buffer[MAX_STRING_SIZE] = {};
 	char* set_key[SET_KEY_SIZE] = {};
 
-	double network_latency = get_network_latency(cache, 20);
+	// double network_latency = get_network_latency(cache, 20);
 
 	clock_t time_per_request = CLOCKS_PER_SEC/requests_per_second;
 	clock_t pre_time = clock();
@@ -173,12 +173,12 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 
 int main() {
 	auto cache = create_cache(0, NULL);
-	uint i = 6;
+	uint i = 10;
 	// while(true) {
-		i = 6;
-		for(;i < 31; i += 1) {
+		// i = 6;
+		for(;i < 26; i += 1) {
 			printf("Starting %d\n", 1<<i);
-			bool is_valid = workload(cache, 1<<i, 250, 4, 1000);
+			bool is_valid = workload(cache, 1<<i, 250, 4, 10000);
 			if(!is_valid) break;
 			sleep(1);
 		}
