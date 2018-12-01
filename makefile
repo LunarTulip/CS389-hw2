@@ -23,7 +23,7 @@ cache_test:
 	$(CPP) -g types.h book.h client.cc eviction.cc -o test tests.cc;
 	./test;
 
-benchmark:
+workload:
 	$(CPP) -g cache.h client.cc workload.cc random.hh -o benchmark;
 	./benchmark;
 
