@@ -27,5 +27,9 @@ workload:
 	$(CPP) -O3 cache.h client.cc workload.cc random.hh -lpthread -o benchmark;
 	./benchmark;
 
+workloadTest:
+	$(CPP) -Og -Wall -Wextra -pedantic cache.h client.cc workload.cc random.hh -lpthread -o benchmark;
+	valgrind -v ./benchmark;
+
 clean:
 	rm -f *.o; rm -f *.h.gch; rm test
