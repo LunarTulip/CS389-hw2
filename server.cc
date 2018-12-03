@@ -21,7 +21,7 @@ using Hash_func = hash_func;
 
 constexpr uint DEFAULT_PORT = 33052;
 constexpr uint DEFAULT_MAX_MEMORY = 1<<30;
-constexpr uint MAX_MESSAGE_SIZE = 1<<10;
+constexpr uint MAX_MESSAGE_SIZE = 1<<12;
 constexpr uint HIGH_BIT = 1<<(8*sizeof(uint) - 1);
 constexpr uint MAX_MAX_MEMORY = ~HIGH_BIT;
 
@@ -261,8 +261,8 @@ int main(int argc, char** argv) {
 							response = NOT_FOUND;
 							response_size = HEADER_SIZE;
 						} else if(key_size + value_size >= MAX_MESSAGE_SIZE) {//shouldn't be possible
-						response = TOO_LARGE;
-						response_size = HEADER_SIZE;
+							response = TOO_LARGE;
+							response_size = HEADER_SIZE;
 						} else {
 							uint buffer_size = 0;
 							write_uint_to(&buffer[buffer_size], key_size);

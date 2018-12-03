@@ -1,68 +1,48 @@
 //By Monica Moniot and Alyssa Riceman
 #ifndef TYPES_H
 #define TYPES_H
-#include "cache.h"
+#include <stdlib.h>
+#include "cache_server.hh"
 
-using byte = uint8_t;//this must have the size of a unit of memory (a byte)
-using uint_ptr = uint64_t;//this must have the size of a pointer
+using byte = char;
+using uint = uint32_t;
+using int8 = uint8_t;
+using uint8 = uint8_t;
+using int32 = uint32_t;
+using uint32 = uint32_t;
+using int64 = uint64_t;
+using uint64 = uint64_t;
 
-using Cache = cache_obj;
-using Key_ptr = key_type;
-using Value_ptr = val_type;
-using Index = index_type;
-using Hash_func = hash_func;
+template<class t, class x> constexpr inline t cast(x value) {
+	return (t)value;
+}
+template<class t> inline t* malloc(uint size) {
+	return (t*)malloc(sizeof(t)*size);
+}
 
 //different evictors want to use memory differently
 //we define these different types of memory here and combine them all in a union so that each policy has access to its data
 //Evictor goes on the cache itself, Evict_item goes on each individual entry
-enum evictor_type {//evictor_types
-	FIFO,
-	LIFO,
-	LRU,
-	MRU,
-	CLOCK,
-	SLRU,
-	RR,
-};
+
 
 struct Node {
 	Index next;
 	Index pre;
-	bool rf_bit;
 };
-union Evict_item {
-	Index rand_i;
-	Node node;
-};
+using Evict_item = Node;
 struct DLL {
 	Index head;
 };
-struct SLRU_data {
-	DLL protect;
-	DLL prohibate;
-	Index pp_delta;
-};
-
-struct Rand_data {
-	Index total_items;
-};
-union Evictor_data {
-	DLL list;
-	Rand_data rand_data;
-	SLRU_data dlist;
-};
 
 struct Evictor {
-	evictor_type policy;
-	Evictor_data data;
-	void* mem_arena;
+	DLL list;
 };
 
 
 
 struct Entry {
 	Index cur_i;//index to the entry's position in the hash table
-	Key_ptr key;
+	byte* key;
 	Index key_size;
 	byte* value;
 	Index value_size;
@@ -82,15 +62,14 @@ struct Book {
 };
 
 
-struct cache_obj {//Definition of Cache
+struct Cache {//Definition of Cache
 	Index mem_capacity;
 	Index mem_total;
-	Index entry_capacity;
+	Index hash_table_capacity;
 	Index entry_total;
 	Index dead_total;//records deleted entries
 	byte* mem_arena;//joint allocation of: {hash_table {Index* key_hashes, Bookmark* bookmarks}, Page* pages, void* evict_data}; these fields have functions for retrieving them
 	Book entry_book;
-	Hash_func hash;
 	Evictor evictor;
 };
 #endif
