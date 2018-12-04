@@ -1,5 +1,5 @@
 //By Monica Moniot and Alyssa Riceman
-#include "cache.h"
+#include "cache_server.hh"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,17 +10,25 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-using byte = uint8_t;//this must have the size of a unit of memory (a byte)
+using byte = char;
+using uint = uint32_t;
+using int8 = uint8_t;
+using uint8 = uint8_t;
+using int32 = uint32_t;
+using uint32 = uint32_t;
+using int64 = uint64_t;
 using uint64 = uint64_t;
-using Cache = cache_obj;
-using Key_ptr = key_type;
-using Value_ptr = val_type;
-using uint = index_type;
-using Hash_func = hash_func;
+
+template<class t, class x> constexpr inline t cast(x value) {
+	return (t)value;
+}
+template<class t> inline t* malloc(uint size) {
+	return (t*)malloc(sizeof(t)*size);
+}
 
 
 constexpr uint DEFAULT_PORT = 33052;
-constexpr uint DEFAULT_MAX_MEMORY = 1<<30;
+constexpr uint DEFAULT_MAX_MEMORY = 1<<18;
 constexpr uint MAX_MESSAGE_SIZE = 1<<12;
 constexpr uint HIGH_BIT = 1<<(8*sizeof(uint) - 1);
 constexpr uint MAX_MAX_MEMORY = ~HIGH_BIT;
@@ -62,8 +70,8 @@ inline uint read_uint_from(char* buffer) {
 
 struct Socket {
 	uint64 file_desc;
-	sockaddr* address;
-	socklen_t* address_size;
+	sockaddr_in address;
+	socklen_t address_size;
 };
 int create_socket(Socket* open_socket, uint p, uint port) {
 	// Creating socket file descriptor
@@ -81,13 +89,13 @@ int create_socket(Socket* open_socket, uint p, uint port) {
 	}
 
 	sockaddr_in address_in;
-	uint address_in_size = sizeof(address_in);
+	// uint address_in_size = ;
 	address_in.sin_family = AF_INET;
 	address_in.sin_addr.s_addr = INADDR_ANY;
 	address_in.sin_port = htons(port);
 
-	sockaddr* address = reinterpret_cast<sockaddr*>(&address_in);
-	socklen_t* address_size = reinterpret_cast<socklen_t*>(&address_in_size);
+	sockaddr* address = cast<sockaddr*>(&address_in);
+	// socklen_t* address_size = reinterpret_cast<socklen_t*>(&address_in_size);
 
 	// Forcefully attaching socket to the port
 	auto error_code = bind(server_fd, address, sizeof(address_in));
@@ -103,8 +111,8 @@ int create_socket(Socket* open_socket, uint p, uint port) {
 		}
 	}
 	open_socket->file_desc = server_fd;
-	open_socket->address = address;
-	open_socket->address_size = address_size;
+	open_socket->address = address_in;
+	open_socket->address_size = sizeof(address_in);
 	return 0;
 }
 
@@ -174,7 +182,7 @@ int main(int argc, char** argv) {
 	udp_fd->revents = 0;
 
 
-	auto cache = create_cache(max_mem, NULL);//we could have written this to the stack to avoid compulsory cpu misses
+	Cache* cache = create_cache(max_mem);//we could have written this to the stack to avoid compulsory cpu misses
 	// printf("%d\n", max_mem);
 	bool is_unset = true;
 
@@ -227,7 +235,7 @@ int main(int argc, char** argv) {
 			return -1;
 		}
 
-		uint new_socket = accept(open_socket.file_desc, open_socket.address, open_socket.address_size);
+		uint new_socket = accept(open_socket.file_desc, cast<sockaddr*>(&open_socket.address), &open_socket.address_size);
 		if(new_socket <= 0) {
 			perror("accept failure");
 			return -1;
@@ -256,7 +264,7 @@ int main(int argc, char** argv) {
 					if(key_size > 0) {
 						key[key_size] = 0;//--<--
 						uint value_size;
-						auto value = cache_get(cache, key, &value_size);
+						auto value = cache_get(cache, key, key_size, &value_size);
 						if(value == NULL) {
 							response = NOT_FOUND;
 							response_size = HEADER_SIZE;
@@ -305,7 +313,7 @@ int main(int argc, char** argv) {
 						uint value_size = get_item_size(value, message_size);
 						if(key_size > 0 and value_size > 0) {
 							key[key_size] = 0;//--<--
-							auto code = cache_set(cache, key, value, value_size);
+							auto code = cache_set(cache, key, key_size, value, value_size);
 							if(code < 0) {
 								response = TOO_LARGE;
 								response_size = HEADER_SIZE;
@@ -332,7 +340,7 @@ int main(int argc, char** argv) {
 						key[key_size] = 0;
 
 						if(key_size > 0) {
-							auto code = cache_delete(cache, key);
+							auto code = cache_delete(cache, key, key_size);
 							if(code < 0) {
 								response = NOT_FOUND;
 								response_size = HEADER_SIZE;
@@ -380,7 +388,7 @@ int main(int argc, char** argv) {
 							if(is_unset and new_max_mem > 0 and new_max_mem <= MAX_MAX_MEMORY) {
 								//Resetting the max_mem would be so so easy if it wasn't for the fixed api, now we have to delete the current cache just to reset it. What could have been the least expensive call for the entire server will now most likely be very expensive.
 								destroy_cache(cache);
-								cache = create_cache(new_max_mem, NULL);
+								cache = create_cache(new_max_mem);
 								response = ACCEPTED;
 								response_size = HEADER_SIZE;
 							} else {
@@ -412,7 +420,7 @@ int main(int argc, char** argv) {
 	close(tcp_socket.file_desc);
 	close(udp_socket.file_desc);
 	//NOTE: uncomment if program no longer exits here
-	// destroy_cache(cache);
+	destroy_cache(cache);
 	return 0;
 	//-----------------
 }

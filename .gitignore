@@ -3,13 +3,14 @@ cache.h.gch
 cache.o
 dump.txt
 eviction_policy.h.gch
-eviction.h.gch
+eviction.hh.gch
 eviction.o
-book.h.gch
+book.hh.gch
 test
-types.h.gch
+types.hh.gch
 .gitignore
 server.o
 client
 server
 benchmark
+cache_server.hh.gch

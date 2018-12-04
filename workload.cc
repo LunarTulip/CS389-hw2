@@ -298,18 +298,18 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 
 int main() {
 	auto cache = create_cache(0, NULL);
-	uint i = 20;
+	uint i = 48;
 	// while(true) {
 		// i = 6;
-		for(;; i += 1) {
-			uint j = pow(2, (float)i/2);
+		for(;i < 62; i += 1) {
+			uint j = pow(2, (float)i/4);
 			printf("Starting %d\n", j);
 			bool is_valid = workload(cache, j, 25, 4, 5000);
 			if(!is_valid) break;
-			sleep(1);
+			// sleep(1);
 		}
 	// }
 	printf("The highest number of request per second reached was %d\n", 1<<(i - 1));
-	// destroy_cache(cache);
+	destroy_cache(cache);
 	return 0;
 }

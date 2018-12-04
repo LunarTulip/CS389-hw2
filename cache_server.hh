@@ -17,7 +17,7 @@ using Index = uint32_t;
 
 // Create a new cache object with a given maximum memory capacity.
 // If hasher is NULL, use some kind of default (unspecified) has function.
-void create_cache(Cache* cache, Index maxmem);
+Cache* create_cache(Index maxmem);
 
 // Add a <key, value> pair to the cache.
 // If key already exists, it will overwrite the old value.

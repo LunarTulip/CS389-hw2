@@ -16,7 +16,7 @@ using uint64 = uint64_t;
 template<class t, class x> constexpr inline t cast(x value) {
 	return (t)value;
 }
-template<class t> inline t* malloc(uint size) {
+template<class t> inline t* malloc(uint size = 1) {
 	return (t*)malloc(sizeof(t)*size);
 }
 
@@ -61,7 +61,6 @@ struct Book {
 	Bookmark first_unused;
 };
 
-
 struct Cache {//Definition of Cache
 	Index mem_capacity;
 	Index mem_total;
@@ -72,4 +71,5 @@ struct Cache {//Definition of Cache
 	Book entry_book;
 	Evictor evictor;
 };
+
 #endif
