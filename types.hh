@@ -66,7 +66,6 @@ struct Cache {//Definition of Cache
 	Index mem_total;
 	Index hash_table_capacity;
 	Index entry_total;
-	Index dead_total;//records deleted entries
 	byte* mem_arena;//joint allocation of: {hash_table {Index* key_hashes, Bookmark* bookmarks}, Page* pages, void* evict_data}; these fields have functions for retrieving them
 	Book entry_book;
 	Evictor evictor;

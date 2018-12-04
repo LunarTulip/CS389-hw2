@@ -1,8 +1,6 @@
 //By Monica Moniot and Alyssa Riceman
-#include <stdlib.h>
 #include <cstring>
 #include <stdio.h>
-#include <assert.h>
 #include "types.hh"
 #include "book.hh"
 #include "eviction.hh"
@@ -11,7 +9,6 @@
 constexpr Index INIT_HASH_TABLE_CAPACITY = 1<<7;//must be a power of 2
 
 constexpr Index EMPTY = 0;
-constexpr Index DELETED = 1;
 constexpr Index HIGH_BIT = 1<<(8*sizeof(Index) - 1);
 constexpr Index HASH_MULTIPLIER = 2654435769;
 constexpr char NULL_TERMINATOR = 0;
@@ -32,8 +29,8 @@ uint64 total_evictions = 0;
 
 
 constexpr inline Index hash(const byte* item, Index size) {
-	//we want to flag entries by setting their key_hash to EMPTY and DELETED
-	//we need to modify the hash so that it can't equal EMPTY or DELETED
+	//we want to flag entries by setting their key_hash to EMPTY
+	//we need to modify the hash so that it can't equal EMPT
 	//if we don't then everything will break
 	//generates a hash of a c string
 	//We are using David Knuth's multiplicative hash algorithm
@@ -49,10 +46,10 @@ constexpr inline Index hash(const byte* item, Index size) {
 	for(uint i = 0; i < size; i += 1) {
 		hash = (hash*HASH_MULTIPLIER) + item[i];
 	}
-	if(hash == EMPTY or hash == DELETED) {
-		hash ^= size|HIGH_BIT;
+	if(hash == EMPTY) {
+		hash = size|HIGH_BIT;
 	}
-	assert(hash != EMPTY and hash != DELETED);
+	// assert(hash != EMPTY);
 	return hash;
 }
 constexpr inline bool is_mem_equal(const byte* data0, Index size0, const byte* data1, Index size1) {
@@ -66,13 +63,13 @@ constexpr inline bool is_mem_equal(const byte* data0, Index size0, const byte* d
 
 constexpr inline Index get_entry_capacity(Index hash_table_capacity) {
 	//instead of storing the capactiy of the hash table, we calculate it jit
-	return hash_table_capacity>>1;
+	return hash_table_capacity/2;
 }
-constexpr inline bool is_exceeding_load(Index entry_total, Index dead_total, Index hash_table_capacity) {
+constexpr inline bool is_exceeding_load(Index entry_total, Index hash_table_capacity) {
 	//when returns true triggers a table resizing
 	//we would seg-fault if entry_total exceeds entry_capacity
 	Index entry_capacity = get_entry_capacity(hash_table_capacity);
-	return (entry_total + dead_total + 1 >= entry_capacity);
+	return (entry_total + 1 >= entry_capacity);
 }
 
 //instead of storing pointers to our tables, we calculate them jit
@@ -100,7 +97,7 @@ inline byte* allocate(Index hash_table_capacity) {
 	//a joint allocation greatly improves locality
 	//we don't have to store pointers to every data structure
 	//a jointly allocated block is easily serializable
-	const auto hash_table_size = 2*sizeof(Index)*hash_table_capacity;
+	const auto hash_table_size = (sizeof(Bookmark) + sizeof(Index))*hash_table_capacity;
 	const auto book_size = sizeof(Page)*get_entry_capacity(hash_table_capacity);
 	byte* mem_arena = malloc<byte>(hash_table_size + book_size);
 	//make sure all entries are marked as EMPTY, so they can be populated
@@ -112,7 +109,7 @@ void collect_stats(Cache* cache, Index path_length) {
 	total_path_length += path_length;
 	if(path_length > 1) {
 		total_worst_case_searches += 1;
-		total_worst_case_summed_load += cast<double>(cache->entry_total + cache->dead_total)/(cache->hash_table_capacity);
+		total_worst_case_summed_load += cast<double>(cache->entry_total)/(cache->hash_table_capacity);
 		total_worst_case_path_length += path_length;
 		if(worst_path_length < path_length) {
 			worst_path_length = path_length;
@@ -130,7 +127,7 @@ inline Index find_entry(Cache* cache, const byte* key, Index key_size) {
 	const auto entry_book = &cache->entry_book;
 	//check if key is in cache
 	total_searches += 1;
-	total_summed_load += cast<double>(cache->entry_total + cache->dead_total)/hash_table_capacity;
+	total_summed_load += cast<double>(cache->entry_total)/hash_table_capacity;
 	Index capacity_bitmask = hash_table_capacity - 1;
 	Index expected_i = key_hash&capacity_bitmask;
 	for(Index path_length = 1; path_length <= hash_table_capacity; path_length += 1) {
@@ -138,8 +135,6 @@ inline Index find_entry(Cache* cache, const byte* key, Index key_size) {
 		if(cur_key_hash == EMPTY) {
 			collect_stats(cache, path_length);
 			return KEY_NOT_FOUND;
-		} else if(cur_key_hash == DELETED) {
-			//ignore
 		} else if(cur_key_hash == key_hash) {
 			Entry* entry = read_book(entry_book, bookmarks[expected_i]);
 			if(is_mem_equal(entry->key, entry->key_size, key, key_size)) {//found key
@@ -200,9 +195,7 @@ inline void remove_entry(Cache* cache, Index i) {
 		}
 		next_i = (next_i + 1)&capacity_bitmask;
 	}
-	// key_hashes[removed_i] = DELETED;
 	key_hashes[removed_i] = EMPTY;
-	// cache->dead_total += 1;
 }
 
 inline void update_mem_size(Cache* cache, Index mem_change) {
@@ -247,7 +240,7 @@ inline void grow_cache_size(Cache* cache) {
 	// printf("edsd: %d, %d, %d, %d\n", entries_left, new_table_capacity, get_entry_capacity(new_table_capacity), cache->entry_total);
 	for(Index j = 0; entries_left > 0; j += 1) {
 		auto key_hash = pre_key_hashes[j];
-		if(key_hash != EMPTY and key_hash != DELETED) {
+		if(key_hash != EMPTY) {
 			entries_left -= 1;
 			//find empty index
 			Index expected_i = key_hash&capacity_bitmask;
@@ -268,7 +261,6 @@ inline void grow_cache_size(Cache* cache) {
 			new_bookmarks[expected_i] = bookmark;
 		}
 	}
-	cache->dead_total = 0;
 
 	free(pre_mem_arena);
 }
@@ -281,7 +273,6 @@ Cache* create_cache(Index max_mem) {
 	cache->mem_total = 0;
 	cache->hash_table_capacity = hash_table_capacity;
 	cache->entry_total = 0;
-	cache->dead_total = 0;
 	auto mem_arena = allocate(hash_table_capacity);
 	cache->mem_arena = mem_arena;
 	create_book(&cache->entry_book, get_pages(mem_arena, hash_table_capacity));
@@ -297,7 +288,7 @@ void destroy_cache(Cache* cache) {
 	//remove every entry
 	for(Index i = 0; i < hash_table_capacity; i += 1) {
 		auto cur_key_hash = key_hashes[i];
-		if(cur_key_hash != EMPTY and cur_key_hash != DELETED) {//delete entry
+		if(cur_key_hash != EMPTY) {//delete entry
 			Entry* entry = read_book(entry_book, bookmarks[i]);
 			free(entry->key);
 			entry->key = NULL;
@@ -323,8 +314,7 @@ void destroy_cache(Cache* cache) {
 	printf("total evictions: %ld\n", total_evictions);
 	printf("final capacity: %d\n", hash_table_capacity);
 	printf("final count:    %d\n", cache->entry_total);
-	printf("final dead:     %d\n", cache->dead_total);
-	printf("final load:     %f\n", cast<double>(cache->entry_total + cache->dead_total)/hash_table_capacity);
+	printf("final load:     %f\n", cast<double>(cache->entry_total)/hash_table_capacity);
 	printf("final usage:    %d\n", cache->mem_total);
 	free(cache);
 }
@@ -347,17 +337,13 @@ int cache_set(Cache* cache, const byte* key, Index key_size, const byte* value, 
 	memcpy(value_copy, value, value_size);
 	//check if key is in cache
 	total_searches += 1;
-	total_summed_load += cast<double>(cache->entry_total + cache->dead_total)/hash_table_capacity;
+	total_summed_load += cast<double>(cache->entry_total)/hash_table_capacity;
 	Index capacity_bitmask = hash_table_capacity - 1;
 	Index expected_i = key_hash&capacity_bitmask;
 	for(Index path_length = 1; path_length <= hash_table_capacity; path_length += 1) {
 		auto cur_key_hash = key_hashes[expected_i];
 		if(cur_key_hash == EMPTY) {
 			collect_stats(cache, path_length);
-			break;
-		} else if(cur_key_hash == DELETED) {
-			collect_stats(cache, path_length);
-			cache->dead_total -= 1;//we want to ressurect this entry
 			break;
 		} else if(cur_key_hash == key_hash) {
 			auto bookmark = bookmarks[expected_i];
@@ -404,7 +390,7 @@ int cache_set(Cache* cache, const byte* key, Index key_size, const byte* value, 
 
 	key_hashes[new_i] = key_hash;
 	bookmarks[new_i] = bookmark;
-	if(is_exceeding_load(cache->entry_total, cache->dead_total, hash_table_capacity)) {
+	if(is_exceeding_load(cache->entry_total, hash_table_capacity)) {
 		grow_cache_size(cache);
 	}
 	return 0;

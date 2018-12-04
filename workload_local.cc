@@ -65,7 +65,9 @@ char* get_string_or_null(char** strings, uint strings_size) {
 
 
 constexpr uint MAX_STRING_SIZE = 500;
-constexpr uint SET_KEY_SIZE = 100;
+constexpr uint SET_KEY_SIZE = 128;
+constexpr uint KEY_SIZE = 8;
+constexpr uint VALUE_SIZE = 16;
 
 double total_summed_average = 0;
 double worst_case_average = 0;
@@ -97,18 +99,17 @@ bool workload(Cache* cache, uint requests_per_second, uint mean_string_size, uin
 	for(uint i = 0; i < total_requests; i += 1) {
 		pre_sleep_time = clock();
 		double r = pcg_random_uniform();
-		if(r < .65) {//GET
+		if(r < .7) {//GET
 			char* key = NULL;
 			uint key_size;
-			if(r/.65 < .6) {
+			if(r/.7 < .9) {
 				key = get_string_or_null(set_key, SET_KEY_SIZE);
 				if(key) {
-					key_size = strlen(key) + 1;
+					key_size = KEY_SIZE;
 				}
 			}
 			if(!key) {
-				double r_size = random_normal(mean_string_size, std_string_size);
-				key_size = static_cast<uint>(r_size*r_size + 2);
+				key_size = KEY_SIZE;
 				key = buffer;
 				generate_string(key, key_size);
 			}
@@ -121,15 +122,13 @@ bool workload(Cache* cache, uint requests_per_second, uint mean_string_size, uin
 			// if(value) {
 			// delete[] (char*)key;
 			// }
-		} else if(r < .75) {//SET
-			double r_size = random_normal(mean_string_size, std_string_size);
-			uint key_size = static_cast<uint>(r_size*r_size + 2);
+		} else if(r < 1) {//SET
+			uint key_size = KEY_SIZE;
 
 			char* key = new char[key_size];
 			generate_string(key, key_size);
 
-			double r_value_size = random_normal(mean_string_size, std_string_size);
-			uint value_size = static_cast<uint>(r_value_size*r_value_size + 2);
+			uint value_size = VALUE_SIZE;
 			auto value = new char[value_size];
 			generate_string(value, value_size);
 
@@ -138,23 +137,23 @@ bool workload(Cache* cache, uint requests_per_second, uint mean_string_size, uin
 			cur_request_time = clock();
 			add_string(set_key, SET_KEY_SIZE, key);
 		} else {//DELETE
-			char* key = NULL;
-			uint key_size;
-			if((r - .75)/.3 < .1) {
-				key = get_string_or_null(set_key, SET_KEY_SIZE);
-				if(key) {
-					key_size = strlen(key) + 1;
-				}
-			}
-			if(!key) {
-				double r_size = random_normal(mean_string_size, std_string_size);
-				key_size = static_cast<uint>(r_size*r_size + 2);
-				key = buffer;
-				generate_string(key, key_size);
-			}
-			pre_request_time = clock();
-			cache_delete(cache, key, key_size);
-			cur_request_time = clock();
+			// char* key = NULL;
+			// uint key_size;
+			// if((r - .8)/.2 < .1) {
+			// 	key = get_string_or_null(set_key, SET_KEY_SIZE);
+			// 	if(key) {
+			// 		key_size = strlen(key) + 1;
+			// 	}
+			// }
+			// if(!key) {
+			// 	double r_size = random_normal(mean_string_size, std_string_size);
+			// 	key_size = static_cast<uint>(r_size*r_size + 2);
+			// 	key = buffer;
+			// 	generate_string(key, key_size);
+			// }
+			// pre_request_time = clock();
+			// cache_delete(cache, key, key_size);
+			// cur_request_time = clock();
 		}
 		total_request_time += cur_request_time - pre_request_time;
 
@@ -176,7 +175,7 @@ bool workload(Cache* cache, uint requests_per_second, uint mean_string_size, uin
 			total_sleep_time += sleep_time;
 			uint nan = (1e9*(double)sleep_time/CLOCKS_PER_SEC);
 			timespec t = {0, (long)nan};
-			nanosleep(&t, NULL);
+			// nanosleep(&t, NULL);
 		} else {
 			overflow += 1;
 		}
@@ -186,7 +185,7 @@ bool workload(Cache* cache, uint requests_per_second, uint mean_string_size, uin
 	total_summed_average += average_time;
 	bool is_valid = average_time < .001;
 
-	printf("Average time: %fus\n", 1e6*average_time);
+	// printf("Average time: %fus\n", 1e6*average_time);
 	if(overflow > 0) {
 		// printf("Request time took longer than desired %d times\n", overflow);
 	}
@@ -202,17 +201,17 @@ bool workload(Cache* cache, uint requests_per_second, uint mean_string_size, uin
 // const uint std_string_size = 3;
 // const uint requests_per_second = 3;
 
-constexpr uint INITIAL_I = 54;
-constexpr uint FINAL_I = 73;
+constexpr uint INITIAL_I = 1;
+constexpr uint FINAL_I = 32;
 int main() {
-	auto cache = create_cache(1<<17);
+	auto cache = create_cache(1<<20);
 	uint i = INITIAL_I;
 	// while(true) {
 		// i = 6;
 		for(;i <= FINAL_I; i += 1) {
 			uint j = pow(2, (float)i/4);
 			// printf("Starting %d\n", j);
-			bool is_valid = workload(cache, j, 25, 4, 10000);
+			bool is_valid = workload(cache, j, 25, 4, 100000);
 			if(!is_valid) break;
 			// sleep(1);
 		}
