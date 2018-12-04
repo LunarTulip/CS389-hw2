@@ -9,23 +9,23 @@
 #include <poll.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <pthread.h>
 
-using byte = char;
-using uint = uint32_t;
-using int8 = uint8_t;
-using uint8 = uint8_t;
-using int32 = uint32_t;
-using uint32 = uint32_t;
-using int64 = uint64_t;
-using uint64 = uint64_t;
+// using byte = char;
+// using uint = uint32_t;
+// using int8 = uint8_t;
+// using uint8 = uint8_t;
+// using int32 = uint32_t;
+// using uint32 = uint32_t;
+// using int64 = uint64_t;
+// using uint64 = uint64_t;
 
-template<class t, class x> constexpr inline t cast(x value) {
-	return (t)value;
-}
-template<class t> inline t* malloc(uint size) {
-	return (t*)malloc(sizeof(t)*size);
-}
-
+// template<class t, class x> constexpr inline t cast(x value) {
+// 	return (t)value;
+// }
+// template<class t> inline t* malloc(uint size) {
+// 	return (t*)malloc(sizeof(t)*size);
+// }
 
 constexpr uint DEFAULT_PORT = 33052;
 constexpr uint DEFAULT_MAX_MEMORY = 1<<18;
@@ -43,6 +43,8 @@ const uint HEADER_SIZE = strlen(ACCEPTED);
 const char* REQUEST_TYPE = "Content-Type: text/plain\n";
 const char* RESPONSE_TYPE = "Accept: text/plain\n";
 
+Cache _cache;
+Cache *cache = &_cache;
 
 constexpr bool match_start(const char* const item, const uint item_size, const char* const w, const uint size) {
 	if(item_size < size) return false;
@@ -161,6 +163,8 @@ int main(int argc, char** argv) {
 		}
 	}
 
+	create_cache(cache, max_mem);
+
 	Socket tcp_socket;
 	Socket udp_socket;
 	if(create_socket(&udp_socket, SOCK_DGRAM, port) != 0) {
@@ -182,7 +186,6 @@ int main(int argc, char** argv) {
 	udp_fd->revents = 0;
 
 
-	Cache* cache = create_cache(max_mem);//we could have written this to the stack to avoid compulsory cpu misses
 	// printf("%d\n", max_mem);
 	bool is_unset = true;
 
@@ -241,10 +244,13 @@ int main(int argc, char** argv) {
 			return -1;
 		}
 
-		char* message = message_buffer;
-		uint message_size = read(new_socket, message_buffer, MAX_MESSAGE_SIZE);
+		char* message = new char[MAX_MESSAGE_SIZE + 1];
+		memcpy(message, message_buffer, (MAX_MESSAGE_SIZE + 1));
+		uint message_size = read(new_socket, message, MAX_MESSAGE_SIZE);
 		const char* response = NULL;
 		uint response_size = 0;
+
+		//Pass in socket, get message and response in the thread
 
 		// printf("---REQUEST:\n%.*s\n---\n", message_size, message);
 
@@ -388,7 +394,7 @@ int main(int argc, char** argv) {
 							if(is_unset and new_max_mem > 0 and new_max_mem <= MAX_MAX_MEMORY) {
 								//Resetting the max_mem would be so so easy if it wasn't for the fixed api, now we have to delete the current cache just to reset it. What could have been the least expensive call for the entire server will now most likely be very expensive.
 								destroy_cache(cache);
-								cache = create_cache(new_max_mem);
+								create_cache(cache, new_max_mem);
 								response = ACCEPTED;
 								response_size = HEADER_SIZE;
 							} else {
