@@ -6,6 +6,10 @@
 #include <math.h>
 #include <string.h>
 #include <pthread.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <cassert>
 #include "cache.h"
 #include "random.hh"
 
@@ -75,15 +79,43 @@ char* get_string_or_null(char** strings, uint strings_size) {
 // constexpr uint MAX_STRING_SIZE = 500;
 constexpr uint SET_KEY_SIZE = 100;
 
-double get_network_latency(cache_obj* cache, uint iterations) {
-	clock_t pre_time = clock();
+double get_network_latency(const char* ipAddress, uint16_t portNo, uint32_t iterations) {
 
+	char* tinyMessage = new char[3];
+	tinyMessage[0] = '\n';
+	tinyMessage[1] = '\n';
+	tinyMessage[2] = 0;
+
+	char serverReply[64];
+
+	clock_t before = clock();
 	for(uint i = 0; i < iterations; i += 1) {
-		cache_space_used(cache);
- 	}
-	clock_t cur_time = clock();
+		int latencyCheckSocket = socket(AF_INET, SOCK_STREAM, 0);
+		assert(latencyCheckSocket >= 0 && "Socket creation failed in latency check.");
 
-	return (((double)(cur_time - pre_time))/iterations)/CLOCKS_PER_SEC;
+		sockaddr_in serverAddress;
+		serverAddress.sin_family = AF_INET;
+		serverAddress.sin_port = htons(portNo);
+		int addressSuccess = inet_pton(AF_INET, ipAddress, &serverAddress.sin_addr.s_addr);
+		assert(addressSuccess == 1 && "Socket address set failed in latency check.");
+
+		const sockaddr *addressPointer = reinterpret_cast<const sockaddr *>(&serverAddress);
+		int connectionSuccess = connect(latencyCheckSocket, addressPointer, sizeof(serverAddress));
+		assert(connectionSuccess == 0 && "Socket connection failed in latency check.");
+
+		int sendSuccess = send(latencyCheckSocket, tinyMessage, 3, 0);
+		assert(sendSuccess >= 0 && "Failed to ping server for latency.");
+
+		int readSuccess = read(latencyCheckSocket, serverReply, 64);
+		assert(readSuccess >= 0 && "Failed to read from server.");
+
+		close(latencyCheckSocket);
+	}
+	clock_t after = clock();
+	
+	delete[] tinyMessage;
+
+	return (((double)(after - before))/iterations)/CLOCKS_PER_SEC;
 }
 
 void* time_get(void* args) {
@@ -105,7 +137,7 @@ void* time_get(void* args) {
 	pthread_mutex_unlock(&requestTimeMutex);
 
 	delete[] argsAsStruct->key;
-	delete[] argsAsStruct;
+	delete argsAsStruct;
 	if(value) {
 		delete[] static_cast<const char*>(value);
 	}
@@ -133,6 +165,7 @@ void* time_set(void* args) {
 
 	delete[] argsAsStruct->key;
 	delete[] static_cast<const char*>(argsAsStruct->value);
+	delete argsAsStruct;
 
 	pthread_exit(NULL);
 }
@@ -156,6 +189,7 @@ void* time_delete(void* args) {
 	pthread_mutex_unlock(&requestTimeMutex);
 
 	delete[] argsAsStruct->key;
+	delete argsAsStruct;
 
 	pthread_exit(NULL);
 }
@@ -166,26 +200,23 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 	// char buffer[MAX_STRING_SIZE] = {};
 	char* set_key[SET_KEY_SIZE] = {};
 
-	// double network_latency = get_network_latency(cache, 20);
+	double averageLatency = 0; // get_network_latency("127.0.0.1", 33052, 1000);
 
 	clock_t time_per_request = CLOCKS_PER_SEC/requests_per_second;
 	clock_t pre_time = clock();
 	clock_t total_sleep_time = 0;
-	// clock_t total_request_time = 0;
 	clock_t pre_sleep_time = pre_time;
 	clock_t cur_sleep_time = 0;
-	clock_t pre_request_time = 0;
-	clock_t cur_request_time = 0;
 
 	totalRequestTime = 0;
 
 	uint overflow = 0;
 
-	pthread_t threads[total_requests];
+	pthread_t* threads = new pthread_t[total_requests];
 	pthread_attr_t joinable;
 	pthread_attr_init(&joinable);
 	pthread_attr_setdetachstate(&joinable, PTHREAD_CREATE_JOINABLE);
-	void* status;
+	void* status = NULL;
 
 	for(uint i = 0; i < total_requests; i += 1) {
 		pre_sleep_time = clock();
@@ -206,17 +237,10 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 				key = new char[key_size];
 				generate_string(key, key_size);
 			}
-			uint value_size;
 
-			requestArgs* args = new requestArgs{cache, key, NULL, value_size};
+			requestArgs* args = new requestArgs{cache, key, NULL, 0};
 			pthread_create(&(threads[i]), &joinable, time_get, static_cast<void*>(args));
-			// pre_request_time = clock();
-			// const void* value = cache_get(cache, key, &value_size);
-			// cur_request_time = clock();
-			// if(value) {
-			// 	delete[] (char*)value;
-			// }
-		} else if(r < .8) {//SET
+		} else if(r < .7) {//SET
 			double r_size = random_normal(mean_string_size, std_string_size);
 			uint key_size = static_cast<uint>(r_size*r_size + 2);
 
@@ -232,13 +256,9 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 
 			requestArgs* args = new requestArgs{cache, key, value, value_size};
 			pthread_create(&(threads[i]), &joinable, time_set, static_cast<void*>(args));
-			// pre_request_time = clock();
-			// cache_set(cache, key, value, value_size);
-			// cur_request_time = clock();
-			// add_string(set_key, SET_KEY_SIZE, key_copy);
 		} else {//DELETE
 			char* key = NULL;
-			if(r/.65 < .6) {
+			if(r/.65 < .02) {
 				char* key_copy = get_string_or_null(set_key, SET_KEY_SIZE);
 				if(key_copy) {
 					uint key_size = strlen(key_copy) + 1;
@@ -255,12 +275,7 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 
 			requestArgs* args = new requestArgs{cache, key, NULL, 0};
 			pthread_create(&(threads[i]), &joinable, time_delete, static_cast<void*>(args));
-			// pre_request_time = clock();
-			// cache_delete(cache, key);
-			// cur_request_time = clock();
 		}
-		// total_request_time += cur_request_time - pre_request_time;
-
 
 		cur_sleep_time = clock();
 		int sleep_time = time_per_request - (cur_sleep_time - pre_sleep_time);
@@ -277,39 +292,34 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 		pthread_join(threads[i], &status);
 	}
 
-	double average_time = (((double)(totalRequestTime))/CLOCKS_PER_SEC)/total_requests;
+	double average_time = ((((double)(totalRequestTime))/CLOCKS_PER_SEC)/total_requests) - averageLatency;
 	bool is_valid = average_time < .001;
 
 	printf("Average time: %fms\n", 1e3*average_time);
 	if(overflow > 0) {
-		printf("Request time took longer than desired %d times\n", overflow);
+		printf("Request time was longer than desired %d times.\n", overflow);
 	}
 	// if(is_valid and overflow > total_requests/2) {
-	// 	printf("More than half of the requests overflowed! The server is faster than the client\n");
+	// 	printf("More than half of the requests overflowed! The server is faster than the client.\n");
 	// 	return false;
 	// }
+
+	delete[] threads;
+
 	return is_valid;
 }
 
-// const uint total_requests = 10000;
-// const uint mean_string_size = 20;
-// const uint std_string_size = 3;
-// const uint requests_per_second = 3;
-
 int main() {
 	auto cache = create_cache(0, NULL);
-	uint i = 48;
-	// while(true) {
-		// i = 6;
-		for(;i < 62; i += 1) {
-			uint j = pow(2, (float)i/4);
-			printf("Starting %d\n", j);
-			bool is_valid = workload(cache, j, 25, 4, 5000);
-			if(!is_valid) break;
-			// sleep(1);
-		}
-	// }
-	printf("The highest number of request per second reached was %d\n", 1<<(i - 1));
+	uint i = 20;
+	for(;; i += 1) {
+		uint j = pow(2, (float)i/2);
+		printf("Starting %d\n", j);
+		bool is_valid = workload(cache, j, 25, 4, 5000);
+		if(!is_valid) break;
+		sleep(1);
+	}
+	printf("The highest number of requests per second with under 1ms mean response time was %d.\n", static_cast<uint32_t>(pow(2, static_cast<float>((i-1)/2))));
 	destroy_cache(cache);
 	return 0;
 }

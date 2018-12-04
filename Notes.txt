@@ -4,4 +4,4 @@
 4. Implemented fast modulus(little)
 5. Tried linear probing(instead of double hashing)(unnoticable)
 6. Created custom local workload
-7.
+7. Reduced client memory allocations

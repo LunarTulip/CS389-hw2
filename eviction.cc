@@ -1,8 +1,8 @@
 //By Monica Moniot and Alyssa Riceman
 #include <stdlib.h>
-#include "eviction.h"
-#include "book.h"
-#include "types.h"
+#include "eviction.hh"
+#include "book.hh"
+#include "types.hh"
 
 constexpr Bookmark INVALID_NODE = -1;
 

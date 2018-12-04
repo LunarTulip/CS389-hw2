@@ -153,8 +153,8 @@ int cache_set(cache_type cache, key_type key, val_type val, index_type val_size)
     char* setRequest = makeHttpRequest("PUT", "key", key, val, val_size, &setRequestSize);
     send(setSocket, setRequest, setRequestSize, 0);
 
-    char* serverReadBuffer = new char[2048];
-    int serverReadLength = read(setSocket, serverReadBuffer, 2048);
+    char* serverReadBuffer = new char[1024];
+    int serverReadLength = read(setSocket, serverReadBuffer, 1024);
     assert(serverReadLength >= 0 && "Failed to read from server.");
 
     int setSuccess = handleStatusCode(serverReadBuffer, serverReadLength);
@@ -173,8 +173,8 @@ val_type cache_get(cache_type cache, key_type key, index_type *val_size) {
     int sendSuccess = send(getSocket, getRequest, getRequestSize, 0);
     assert(sendSuccess >= 0 && "Failed to send space used request.");
 
-    char* serverReadBuffer = new char[2048];
-    int serverReadLength = read(getSocket, serverReadBuffer, 2048);
+    char* serverReadBuffer = new char[1024];
+    int serverReadLength = read(getSocket, serverReadBuffer, 1024);
     assert(serverReadLength >= 0 && "Failed to read from server.");
 
     int getSuccess = handleStatusCode(serverReadBuffer, serverReadLength);
@@ -201,8 +201,8 @@ int cache_delete(cache_type cache, key_type key) {
     int sendSuccess = send(deleteSocket, deleteRequest, deleteRequestSize, 0);
     assert(sendSuccess >= 0 && "Failed to send delete request.");
 
-    char* serverReadBuffer = new char[2048];
-    int serverReadLength = read(deleteSocket, serverReadBuffer, 2048);
+    char* serverReadBuffer = new char[1024];
+    int serverReadLength = read(deleteSocket, serverReadBuffer, 1024);
     assert(serverReadLength >= 0 && "Failed to read from server.");
 
     int deleteSuccess = handleStatusCode(serverReadBuffer, serverReadLength);
@@ -221,8 +221,8 @@ index_type cache_space_used(cache_type cache){
     int sendSuccess = send(spaceUsedSocket, spaceUsedRequest, spaceUsedRequestSize, 0);
     assert(sendSuccess >= 0 && "Failed to send space used request.");
 
-    char*serverReadBuffer = new char[2048];
-    int serverReadLength = read(spaceUsedSocket, serverReadBuffer, 2048);
+    char*serverReadBuffer = new char[1024];
+    int serverReadLength = read(spaceUsedSocket, serverReadBuffer, 1024);
     assert(serverReadLength >= 0 && "Failed to read from server.");
 
     int spaceUsedSuccess = handleStatusCode(serverReadBuffer, serverReadLength);
