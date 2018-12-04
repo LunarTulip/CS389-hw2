@@ -2,7 +2,7 @@
 #ifndef TYPES_H
 #define TYPES_H
 #include <stdlib.h>
-#include "cache_server.hh"
+#include <inttypes.h>
 
 using byte = char;
 using uint = uint32_t;
@@ -25,6 +25,7 @@ template<class t> inline t* malloc(uint size = 1) {
 //Evictor goes on the cache itself, Evict_item goes on each individual entry
 
 
+using Index = uint32_t;
 struct Node {
 	Index next;
 	Index pre;
@@ -42,8 +43,8 @@ struct Evictor {
 
 struct Entry {
 	Index cur_i;//index to the entry's position in the hash table
-	byte* key;
 	Index key_size;
+	byte* key;
 	byte* value;
 	Index value_size;
 	Evict_item evict_item;
@@ -61,14 +62,6 @@ struct Book {
 	Bookmark first_unused;
 };
 
-struct Cache {//Definition of Cache
-	Index mem_capacity;
-	Index mem_total;
-	Index hash_table_capacity;
-	Index entry_total;
-	byte* mem_arena;//joint allocation of: {hash_table {Index* key_hashes, Bookmark* bookmarks}, Page* pages, void* evict_data}; these fields have functions for retrieving them
-	Book entry_book;
-	Evictor evictor;
-};
+
 
 #endif

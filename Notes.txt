@@ -8,3 +8,4 @@
 8. Implemented proper delete(noticeable memory)
 9. Switched from SOA to AOS (poor)
 10. Reduced client memory allocations
+11. Allocated keys and values together(unnoticable)

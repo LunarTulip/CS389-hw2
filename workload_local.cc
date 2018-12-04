@@ -204,7 +204,9 @@ bool workload(Cache* cache, uint requests_per_second, uint mean_string_size, uin
 constexpr uint INITIAL_I = 1;
 constexpr uint FINAL_I = 32;
 int main() {
-	auto cache = create_cache(1<<20);
+	Cache _cache;
+	Cache* cache = &_cache;
+	create_cache(cache, 1<<20);
 	uint i = INITIAL_I;
 	// while(true) {
 		// i = 6;

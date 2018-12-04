@@ -1,7 +1,6 @@
 //By Monica Moniot and Alyssa Riceman
 #include <cstring>
 #include <stdio.h>
-#include "types.hh"
 #include "book.hh"
 #include "eviction.hh"
 #include "cache_server.hh"
@@ -165,12 +164,11 @@ inline void remove_entry(Cache* cache, Index i) {
 	Entry* entry = read_book(entry_book, bookmark);
 
 	free(entry->key);
+	entry->value = NULL;
 	entry->key = NULL;
 	cache->entry_total -= 1;
 
 	cache->mem_total -= entry->value_size + entry->key_size;
-	free(entry->value);
-	entry->value = NULL;
 	remove_evict_item(evictor, bookmark, &entry->evict_item, entry_book);
 	free_book_page(entry_book, bookmark);
 
@@ -266,8 +264,7 @@ inline void grow_cache_size(Cache* cache) {
 }
 
 
-Cache* create_cache(Index max_mem) {
-	Cache* cache = malloc<Cache>(1);
+void create_cache(Cache* cache, Index max_mem) {
 	Index hash_table_capacity = INIT_HASH_TABLE_CAPACITY;
 	cache->mem_capacity = max_mem;
 	cache->mem_total = 0;
@@ -277,7 +274,6 @@ Cache* create_cache(Index max_mem) {
 	cache->mem_arena = mem_arena;
 	create_book(&cache->entry_book, get_pages(mem_arena, hash_table_capacity));
 	create_evictor(&cache->evictor);
-	return cache;
 }
 void destroy_cache(Cache* cache) {
 	const auto hash_table_capacity = cache->hash_table_capacity;
@@ -292,9 +288,8 @@ void destroy_cache(Cache* cache) {
 			Entry* entry = read_book(entry_book, bookmarks[i]);
 			free(entry->key);
 			entry->key = NULL;
-			//no need to free the entry, it isn't generally allocated
-			free(entry->value);
 			entry->value = NULL;
+			//no need to free the entry, it isn't generally allocated
 		}
 	}
 	free(cache->mem_arena);
@@ -316,7 +311,6 @@ void destroy_cache(Cache* cache) {
 	printf("final count:    %d\n", cache->entry_total);
 	printf("final load:     %f\n", cast<double>(cache->entry_total)/hash_table_capacity);
 	printf("final usage:    %d\n", cache->mem_total);
-	free(cache);
 }
 
 int cache_set(Cache* cache, const byte* key, Index key_size, const byte* value, Index value_size) {
@@ -333,8 +327,6 @@ int cache_set(Cache* cache, const byte* key, Index key_size, const byte* value, 
 
 	const auto key_hash = hash(key, key_size);
 
-	byte* value_copy = malloc<byte>(value_size);//we assume value_size is in bytes
-	memcpy(value_copy, value, value_size);
 	//check if key is in cache
 	total_searches += 1;
 	total_summed_load += cast<double>(cache->entry_total)/hash_table_capacity;
@@ -351,10 +343,19 @@ int cache_set(Cache* cache, const byte* key, Index key_size, const byte* value, 
 			if(is_mem_equal(entry->key, entry->key_size, key, key_size)) {//found key
 				true_hash_hits += 1;
 				update_mem_size(cache, value_size - entry->value_size);
-				//delete previous value
-				free(entry->value);
-				//add new value
-				entry->value = value_copy;
+				//delete previous value and add new value
+				if(entry->value_size >= value_size) {
+					memcpy(entry->value, value, value_size);
+				} else {//grow the block
+					free(entry->key);
+					byte* key_copy = malloc<byte>(key_size + value_size);
+					byte* value_copy = &key_copy[key_size];
+					memcpy(key_copy, key, key_size);
+					memcpy(value_copy, value, value_size);
+
+					entry->key = key_copy;
+					entry->value = value_copy;
+				}
 				entry->value_size = value_size;
 				touch_evict_item(evictor, bookmark, &entry->evict_item, entry_book);
 				collect_stats(cache, path_length);
@@ -369,8 +370,10 @@ int cache_set(Cache* cache, const byte* key, Index key_size, const byte* value, 
 	total_added += 1;
 
 	//add key at new_i
-	byte* key_copy = malloc<byte>(key_size);
+	byte* key_copy = malloc<byte>(key_size + value_size);
+	byte* value_copy = &key_copy[key_size];
 	memcpy(key_copy, key, key_size);
+	memcpy(value_copy, value, value_size);
 
 	//add new value
 	update_mem_size(cache, total_size);

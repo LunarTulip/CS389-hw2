@@ -3,13 +3,22 @@
  * Data is given as blobs (void *) of a given size,
  * and indexed by a string key.
  */
+#ifndef CACHES_H
+#define CACHES_H
+#include "types.hh"
 
-#include <inttypes.h>
 
 // An unspecified (implementation dependent, in the C file) cache object.
-struct Cache;
+struct Cache {//Definition of Cache
+	Index mem_capacity;
+	Index mem_total;
+	Index hash_table_capacity;
+	Index entry_total;
+	byte* mem_arena;//joint allocation of: {hash_table {Index* key_hashes, Bookmark* bookmarks}, Page* pages, void* evict_data}; these fields have functions for retrieving them
+	Book entry_book;
+	Evictor evictor;
+};
 
-using Index = uint32_t;
 
 
 // For a given key string, return a pseudo-random integer:
@@ -17,7 +26,7 @@ using Index = uint32_t;
 
 // Create a new cache object with a given maximum memory capacity.
 // If hasher is NULL, use some kind of default (unspecified) has function.
-Cache* create_cache(Index maxmem);
+void create_cache(Cache* cache, Index maxmem);
 
 // Add a <key, value> pair to the cache.
 // If key already exists, it will overwrite the old value.
@@ -42,3 +51,5 @@ Index cache_space_used(Cache* cache);
 
 // Destroy all resource connected to a cache object
 void destroy_cache(Cache* cache);
+
+#endif

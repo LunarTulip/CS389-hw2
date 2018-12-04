@@ -19,7 +19,7 @@ typedef index_type (*hash_func)(key_type key);
 
 // Create a new cache object with a given maximum memory capacity.
 // If hasher is NULL, use some kind of default (unspecified) has function.
-cache_type create_cache(index_type maxmem, hash_func hasher);
+create_cache(index_type maxmem, hash_func hasher);
 
 // Add a <key, value> pair to the cache.
 // If key already exists, it will overwrite the old value.
