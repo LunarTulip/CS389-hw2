@@ -67,7 +67,7 @@ We made a program to generate requests in accord with our workload chosen above,
 
 Initially, we attempted to run the program serially; however, this didn't work well, because the client waits for a server response before sending its next request, and thus the server was never fed more than one request at a time, which it could easily handle even given being sent many requests per second. To solve this problem, we multithreaded our benchmark, splitting each request into its own thread so that we could have many requests being sent to the server at one time.
 
-Due to deadlines and the difficulty of networking from the Reed CS virtual machine, we only had time to run tests over localhost, not between machines. We do, however, plan to do between-machines testing for the next assignment.
+We attempted to do the tests over a non-localhost network as well, as planned; however, varying network latency added so much noise (the average ping from moment to moment varied by somewhere on the order of half a millisecond) that, even given a pre-test check of average latency we couldn't get any sort of consistent results over the network.
 
 ## 9: Analyze and Interpret Data
 
@@ -158,7 +158,7 @@ So, most of the time, the server couldn't handle the stream of requests at (nomi
 
 We believe the cutoff point to be related to the limits of the processor on which we're running the benchmark. The "Request time was longer than desired [NUMBER] times" messages indicate how often the benchmark chooses not to sleep between requests and instead to immediately follow one request with another, which it does only when approaching the limits of how many messages per second it can send. It seems non-coincidental that the consistent cutoff point for our program is the same as the point at which, extrapolating trends, 5000 of our 5000 requests would be not-slept-after.
 
-We specifically hypothesize this cutoff to be a product of running our client and server on the same machine; with the machine being rapidly flooded with 5000 request threads, we believe that the operating system doesn't know to prioritize the server over the pileup of threads, and thus it bounces between the threads until it times out, never giving the server a chance to answer all of its requests. This provides a strong reason to believe the results to be non-representative of what results would be were we to run the server on a machine separate from that running the benchmarking program. However, due to time constraints, we were unable to do so within the space of this assignment.
+We specifically hypothesize this cutoff to be a product of running our client and server on the same machine; with the machine being rapidly flooded with 5000 request threads, we believe that the operating system doesn't know to prioritize the server over the pileup of threads, and thus it bounces between the threads until it times out, never giving the server a chance to answer all of its requests. This provides a strong reason to believe the results to be non-representative of what results would be were we to run the server on a machine separate from that running the benchmarking program. However, due to noisy connection speed, we were unable to do so with any effectiveness; thus the localhost data is the only worthwhile data we have.
 
 ## 10: Present Results
 
@@ -166,4 +166,4 @@ Here's a plot of our data, which does a pretty good job of making the salient po
 
 ![Requests/second vs. response time](plotteddata.svg)
 
-Mean response time remains near-constant right up until it undergoes a massive upward spike. That spike correponds to the time at which the program typically crashes due to server timeout. As discussed in Part 9, we hypothesize this structure to be a product of running the server and the benchmark on the same machine, and we hope to re-run our benchmark on a separate-from-the-server machine soon in order to acquire better data on what happens if the server, *running on its own*, is overloaded.
+Mean response time remains near-constant right up until it undergoes a massive upward spike. That spike correponds to the time at which the program typically crashes due to server timeout. As discussed in Part 9, we hypothesize this structure to be a product of running the server and the benchmark on the same machine.

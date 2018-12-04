@@ -6,6 +6,10 @@
 #include <math.h>
 #include <string.h>
 #include <pthread.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <cassert>
 #include "cache.h"
 #include "random.hh"
 
@@ -75,15 +79,43 @@ char* get_string_or_null(char** strings, uint strings_size) {
 // constexpr uint MAX_STRING_SIZE = 500;
 constexpr uint SET_KEY_SIZE = 100;
 
-double get_network_latency(cache_obj* cache, uint iterations) {
-	clock_t pre_time = clock();
+double get_network_latency(const char* ipAddress, uint16_t portNo, uint32_t iterations) {
 
+	char* tinyMessage = new char[3];
+	tinyMessage[0] = '\n';
+	tinyMessage[1] = '\n';
+	tinyMessage[2] = 0;
+
+	char serverReply[64];
+
+	clock_t before = clock();
 	for(uint i = 0; i < iterations; i += 1) {
-		cache_space_used(cache);
- 	}
-	clock_t cur_time = clock();
+		int latencyCheckSocket = socket(AF_INET, SOCK_STREAM, 0);
+		assert(latencyCheckSocket >= 0 && "Socket creation failed in latency check.");
 
-	return (((double)(cur_time - pre_time))/iterations)/CLOCKS_PER_SEC;
+		sockaddr_in serverAddress;
+		serverAddress.sin_family = AF_INET;
+		serverAddress.sin_port = htons(portNo);
+		int addressSuccess = inet_pton(AF_INET, ipAddress, &serverAddress.sin_addr.s_addr);
+		assert(addressSuccess == 1 && "Socket address set failed in latency check.");
+
+		const sockaddr *addressPointer = reinterpret_cast<const sockaddr *>(&serverAddress);
+		int connectionSuccess = connect(latencyCheckSocket, addressPointer, sizeof(serverAddress));
+		assert(connectionSuccess == 0 && "Socket connection failed in latency check.");
+
+		int sendSuccess = send(latencyCheckSocket, tinyMessage, 3, 0);
+		assert(sendSuccess >= 0 && "Failed to ping server for latency.");
+
+		int readSuccess = read(latencyCheckSocket, serverReply, 64);
+		assert(readSuccess >= 0 && "Failed to read from server.");
+
+		close(latencyCheckSocket);
+	}
+	clock_t after = clock();
+	
+	delete[] tinyMessage;
+
+	return (((double)(after - before))/iterations)/CLOCKS_PER_SEC;
 }
 
 void* time_get(void* args) {
@@ -168,7 +200,7 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 	// char buffer[MAX_STRING_SIZE] = {};
 	char* set_key[SET_KEY_SIZE] = {};
 
-	// double network_latency = get_network_latency(cache, 20);
+	double averageLatency = 0; // get_network_latency("127.0.0.1", 33052, 1000);
 
 	clock_t time_per_request = CLOCKS_PER_SEC/requests_per_second;
 	clock_t pre_time = clock();
@@ -260,7 +292,7 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 		pthread_join(threads[i], &status);
 	}
 
-	double average_time = (((double)(totalRequestTime))/CLOCKS_PER_SEC)/total_requests;
+	double average_time = ((((double)(totalRequestTime))/CLOCKS_PER_SEC)/total_requests) - averageLatency;
 	bool is_valid = average_time < .001;
 
 	printf("Average time: %fms\n", 1e3*average_time);
@@ -279,7 +311,7 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 
 int main() {
 	auto cache = create_cache(0, NULL);
-	uint i = 20;
+	uint i = 12;
 	for(;; i += 1) {
 		uint j = pow(2, (float)i/2);
 		printf("Starting %d\n", j);
