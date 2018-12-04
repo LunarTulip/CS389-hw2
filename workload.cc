@@ -170,35 +170,33 @@ void* time_set(void* args) {
 	pthread_exit(NULL);
 }
 
-void* time_delete(void* args) {
-	requestArgs* argsAsStruct = static_cast<requestArgs*>(args);
-	clock_t before = 0;
-	clock_t after = 0;
+// void* time_delete(void* args) {
+// 	requestArgs* argsAsStruct = static_cast<requestArgs*>(args);
+// 	clock_t before = 0;
+// 	clock_t after = 0;
 
-	before = clock();
-	cache_delete(argsAsStruct->cache, argsAsStruct->key);
-	after = clock();
+// 	before = clock();
+// 	cache_delete(argsAsStruct->cache, argsAsStruct->key);
+// 	after = clock();
 
-	// pthread_mutex_lock(&threadCountMutex);
-	// printf("Timed thread #%d\n", threadNo);
-	// threadNo++;
-	// pthread_mutex_unlock(&threadCountMutex);
+// 	// pthread_mutex_lock(&threadCountMutex);
+// 	// printf("Timed thread #%d\n", threadNo);
+// 	// threadNo++;
+// 	// pthread_mutex_unlock(&threadCountMutex);
 
-	pthread_mutex_lock(&requestTimeMutex);
-	totalRequestTime += (after - before);
-	pthread_mutex_unlock(&requestTimeMutex);
+// 	pthread_mutex_lock(&requestTimeMutex);
+// 	totalRequestTime += (after - before);
+// 	pthread_mutex_unlock(&requestTimeMutex);
 
-	delete[] argsAsStruct->key;
-	delete argsAsStruct;
+// 	delete[] argsAsStruct->key;
+// 	delete argsAsStruct;
 
-	pthread_exit(NULL);
-}
+// 	pthread_exit(NULL);
+// }
 
-bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size, uint std_string_size, uint total_requests) {
-	mean_string_size = sqrt(mean_string_size);
-	std_string_size = sqrt(std_string_size);
-	// char buffer[MAX_STRING_SIZE] = {};
-	char* set_key[SET_KEY_SIZE] = {};
+bool workload(cache_obj* cache, uint requests_per_second, uint key_size, uint value_size, uint total_requests) {
+	
+	char* set_keys[SET_KEY_SIZE] = {};
 
 	double averageLatency = 0; // get_network_latency("127.0.0.1", 33052, 1000);
 
@@ -221,60 +219,33 @@ bool workload(cache_obj* cache, uint requests_per_second, uint mean_string_size,
 	for(uint i = 0; i < total_requests; i += 1) {
 		pre_sleep_time = clock();
 		double r = pcg_random_uniform();
-		if(r < .65) {//GET
+		if(r < .7) {//GET
 			char* key = NULL;
-			if(r/.65 < .6) {
-				char* key_copy = get_string_or_null(set_key, SET_KEY_SIZE);
+			if(r/.7 < .9) {
+				char* key_copy = get_string_or_null(set_keys, SET_KEY_SIZE);
 				if(key_copy) {
-					uint key_size = strlen(key_copy) + 1;
 					key = new char[key_size];
 					memcpy(key, key_copy, key_size);
 				}
 			}
 			if(!key) {
-				double r_size = random_normal(mean_string_size, std_string_size);
-				uint key_size = static_cast<uint>(r_size*r_size + 2);
 				key = new char[key_size];
 				generate_string(key, key_size);
 			}
 
 			requestArgs* args = new requestArgs{cache, key, NULL, 0};
 			pthread_create(&(threads[i]), &joinable, time_get, static_cast<void*>(args));
-		} else if(r < .7) {//SET
-			double r_size = random_normal(mean_string_size, std_string_size);
-			uint key_size = static_cast<uint>(r_size*r_size + 2);
-
+		} else {//SET
 			char* key = new char[key_size];
 			generate_string(key, key_size);
 			char* key_copy = new char[key_size];
 			memcpy(key_copy, key, key_size);
 
-			double r_value_size = random_normal(mean_string_size, std_string_size);
-			uint value_size = static_cast<uint>(r_value_size*r_value_size + 2);
 			auto value = new char[value_size];
 			generate_string(value, value_size);
 
 			requestArgs* args = new requestArgs{cache, key, value, value_size};
 			pthread_create(&(threads[i]), &joinable, time_set, static_cast<void*>(args));
-		} else {//DELETE
-			char* key = NULL;
-			if(r/.65 < .02) {
-				char* key_copy = get_string_or_null(set_key, SET_KEY_SIZE);
-				if(key_copy) {
-					uint key_size = strlen(key_copy) + 1;
-					key = new char[key_size];
-					memcpy(key, key_copy, key_size);
-				}
-			}
-			if(!key) {
-				double r_size = random_normal(mean_string_size, std_string_size);
-				uint key_size = static_cast<uint>(r_size*r_size + 2);
-				key = new char[key_size];
-				generate_string(key, key_size);
-			}
-
-			requestArgs* args = new requestArgs{cache, key, NULL, 0};
-			pthread_create(&(threads[i]), &joinable, time_delete, static_cast<void*>(args));
 		}
 
 		cur_sleep_time = clock();
@@ -315,7 +286,7 @@ int main() {
 	for(;; i += 1) {
 		uint j = pow(2, (float)i/2);
 		printf("Starting %d\n", j);
-		bool is_valid = workload(cache, j, 25, 4, 5000);
+		bool is_valid = workload(cache, j, 8, 16, 5000);
 		if(!is_valid) break;
 		sleep(1);
 	}
