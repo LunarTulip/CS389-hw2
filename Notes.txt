@@ -1,7 +1,10 @@
-1. Refactored header
-2. Added debug metric
-3. Fixed the hash function
-4. Implemented fast modulus(little)
-5. Tried linear probing(instead of double hashing)(unnoticable)
-6. Created custom local workload
-7. Reduced client memory allocations
+1. Refactored header and code
+2. Baked LRU
+3. Added debug metric
+4. Fixed the hash function(noticeable)
+5. Implemented fast modulus(little)
+6. Tried linear probing(instead of double hashing)(unnoticable)
+7. Created custom local workload
+8. Implemented proper delete(noticeable memory)
+9. Switched from SOA to AOS (poor)
+10. Reduced client memory allocations
