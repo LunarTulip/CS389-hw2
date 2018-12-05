@@ -90,7 +90,7 @@ inline byte* allocate(Index hash_table_capacity) {
 }
 
 constexpr Index KEY_NOT_FOUND = -1;
-inline Index find_entry(const Cache* cache, const byte* key, Index key_size) {
+inline Index find_entry(const Cache* cache, const byte* key, Index key_size, uint* ret_mutex) {
 	//gets the hash table index associated to key
 	const auto hash_table_capacity = cache->hash_table_capacity;
 	const auto key_hashes = get_hashes(cache->mem_arena);
@@ -100,6 +100,12 @@ inline Index find_entry(const Cache* cache, const byte* key, Index key_size) {
 	//check if key is in cache
 	Index capacity_bitmask = hash_table_capacity - 1;
 	Index expected_i = key_hash&capacity_bitmask;
+
+	uint entries_per_mutex = hash_table_capacity/MUTICES_SIZE;
+	uint cur_mutex = expected_i/entries_per_mutex;
+	uint next_mutex = entries_per_mutex - expected_i%entries_per_mutex;
+	pthread_mutex_lock(&cache->mutices[cur_mutex]);
+
 	for(;;) {
 		auto cur_key_hash = key_hashes[expected_i];
 		if(cur_key_hash == EMPTY) {
@@ -111,6 +117,13 @@ inline Index find_entry(const Cache* cache, const byte* key, Index key_size) {
 			}
 		}
 		expected_i = (expected_i + 1)&capacity_bitmask;
+		next_mutex -= 1;
+		if(next_mutex == 0) {
+			pthread_mutex_unlock(&cache->mutices[cur_mutex]);
+			next_mutex = entries_per_mutex;
+			cur_mutex = (cur_mutex + 1)%MUTICES_SIZE;
+			pthread_mutex_lock(&cache->mutices[cur_mutex]);
+		}
 	}
 	printf("Error when attempting to find entry in cache: Full table traversal; index was %d, key was %s, size was %d\n", expected_i, key, hash_table_capacity);
 	return KEY_NOT_FOUND;
@@ -239,7 +252,7 @@ void create_cache(Cache* cache, Index max_mem) {
 	cache->mem_arena = mem_arena;
 	create_book(&cache->entry_book, get_pages(mem_arena, hash_table_capacity));
 	create_evictor(&cache->evictor);
-	pthread_mutex_init(&cache->has_access, NULL);
+	// pthread_mutex_init(&cache->has_access, NULL);
 }
 void destroy_cache(Cache* cache) {
 	const auto hash_table_capacity = cache->hash_table_capacity;
@@ -281,7 +294,10 @@ int cache_set(Cache* cache, const byte* key, Index key_size, const byte* value, 
 	Index capacity_bitmask = hash_table_capacity - 1;
 	Index expected_i = key_hash&capacity_bitmask;
 
-	pthread_mutex_lock(&cache->has_access);
+	uint entries_per_mutex = hash_table_capacity/MUTICES_SIZE;
+	uint cur_mutex = expected_i/entries_per_mutex;
+	uint next_mutex = entries_per_mutex - expected_i%entries_per_mutex;
+	pthread_mutex_lock(&cache->mutices[cur_mutex]);
 
 	for(;;) {
 		auto cur_key_hash = key_hashes[expected_i];
@@ -307,12 +323,25 @@ int cache_set(Cache* cache, const byte* key, Index key_size, const byte* value, 
 				}
 				entry->value_size = value_size;
 				touch_evict_item(evictor, bookmark, &entry->evict_item, entry_book);
+				pthread_mutex_unlock(&cache->mutices[cur_mutex]);
 				return 1;
 			}
 		}
 		expected_i = (expected_i + 1)&capacity_bitmask;
+		next_mutex -= 1;
+		if(next_mutex == 0) {
+			pthread_mutex_unlock(&cache->mutices[cur_mutex]);
+			next_mutex = entries_per_mutex;
+			cur_mutex = (cur_mutex + 1)%MUTICES_SIZE;
+			pthread_mutex_lock(&cache->mutices[cur_mutex]);
+		}
 	}
 	Index new_i = expected_i;
+
+
+	//update and evict
+	update_mem_size(cache, total_size);
+	cache->entry_total += 1;
 
 	//add key at new_i
 	byte* key_copy = malloc<byte>(key_size + value_size);
@@ -320,11 +349,9 @@ int cache_set(Cache* cache, const byte* key, Index key_size, const byte* value, 
 	memcpy(key_copy, key, key_size);
 	memcpy(value_copy, value, value_size);
 
-	//add new value
-	update_mem_size(cache, total_size);
-	cache->entry_total += 1;
-
 	auto bookmark = alloc_book_page(entry_book);
+	key_hashes[new_i] = key_hash;
+	bookmarks[new_i] = bookmark;
 	Entry* entry = read_book(entry_book, bookmark);
 
 	// printf("setting cache now\n");
@@ -335,13 +362,10 @@ int cache_set(Cache* cache, const byte* key, Index key_size, const byte* value, 
 	entry->value = value_copy;
 	entry->value_size = value_size;
 	add_evict_item(evictor, bookmark, &entry->evict_item, entry_book);
-
-	key_hashes[new_i] = key_hash;
-	bookmarks[new_i] = bookmark;
 	if(is_exceeding_load(cache->entry_total, hash_table_capacity)) {
 		grow_cache_size(cache);
 	}
-	pthread_mutex_unlock(&cache->has_access);
+	pthread_mutex_unlock(&cache->mutices[cur_mutex]);
 	return 0;
 }
 
@@ -351,8 +375,8 @@ const byte* cache_get(Cache* cache, const byte* key, Index key_size, Index* ret_
 	const auto evictor = &cache->evictor;
 
 	const byte* ret = NULL;
-	pthread_mutex_lock(&cache->has_access);
-	Index i = find_entry(cache, key, key_size);
+	uint cur_mutex;
+	Index i = find_entry(cache, key, key_size, &cur_mutex);
 	if(i == KEY_NOT_FOUND) {
 	} else {
 		auto bookmark = bookmarks[i];
@@ -362,7 +386,6 @@ const byte* cache_get(Cache* cache, const byte* key, Index key_size, Index* ret_
 		*ret_value_size = entry->value_size;
 		ret = cast<byte*>(entry->value);
 	}
-	pthread_mutex_unlock(&cache->has_access);
 	return ret;
 }
 

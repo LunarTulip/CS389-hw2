@@ -3,6 +3,7 @@
 #define TYPES_H
 #include <stdlib.h>
 #include <inttypes.h>
+// #include <pthread.h>
 
 using byte = char;
 using uint = uint32_t;
@@ -37,6 +38,7 @@ struct DLL {
 
 struct Evictor {
 	DLL list;
+	pthread_mutex_t mutex;
 };
 
 

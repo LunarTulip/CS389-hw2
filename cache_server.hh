@@ -5,18 +5,18 @@
  */
 #ifndef CACHES_H
 #define CACHES_H
-#include <pthread.h>
 #include "types.hh"
 
 
 // An unspecified (implementation dependent, in the C file) cache object.
+constexpr uint MUTICES_SIZE = 16;
 struct Cache {//Definition of Cache
 	Index mem_capacity;
 	Index mem_total;
 	Index hash_table_capacity;
 	Index entry_total;
 	byte* mem_arena;//joint allocation of: {hash_table {Index* key_hashes, Bookmark* bookmarks}, Page* pages, void* evict_data}; these fields have functions for retrieving them
-	pthread_mutex_t has_access;
+	pthread_rwlock_t has_access;
 	Book entry_book;
 	Evictor evictor;
 };

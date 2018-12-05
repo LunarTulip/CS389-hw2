@@ -239,7 +239,7 @@ void create_cache(Cache* cache, Index max_mem) {
 	cache->mem_arena = mem_arena;
 	create_book(&cache->entry_book, get_pages(mem_arena, hash_table_capacity));
 	create_evictor(&cache->evictor);
-	pthread_mutex_init(&cache->has_access, NULL);
+	// pthread_mutex_init(&cache->has_access, NULL);
 }
 void destroy_cache(Cache* cache) {
 	const auto hash_table_capacity = cache->hash_table_capacity;
@@ -281,7 +281,7 @@ int cache_set(Cache* cache, const byte* key, Index key_size, const byte* value, 
 	Index capacity_bitmask = hash_table_capacity - 1;
 	Index expected_i = key_hash&capacity_bitmask;
 
-	pthread_mutex_lock(&cache->has_access);
+	pthread_rwlock_wrlock(&cache->has_access);
 
 	for(;;) {
 		auto cur_key_hash = key_hashes[expected_i];
@@ -341,7 +341,7 @@ int cache_set(Cache* cache, const byte* key, Index key_size, const byte* value, 
 	if(is_exceeding_load(cache->entry_total, hash_table_capacity)) {
 		grow_cache_size(cache);
 	}
-	pthread_mutex_unlock(&cache->has_access);
+	pthread_rwlock_unlock(&cache->has_access);
 	return 0;
 }
 
@@ -351,7 +351,7 @@ const byte* cache_get(Cache* cache, const byte* key, Index key_size, Index* ret_
 	const auto evictor = &cache->evictor;
 
 	const byte* ret = NULL;
-	pthread_mutex_lock(&cache->has_access);
+	pthread_rwlock_rdlock(&cache->has_access);
 	Index i = find_entry(cache, key, key_size);
 	if(i == KEY_NOT_FOUND) {
 	} else {
@@ -362,19 +362,19 @@ const byte* cache_get(Cache* cache, const byte* key, Index key_size, Index* ret_
 		*ret_value_size = entry->value_size;
 		ret = cast<byte*>(entry->value);
 	}
-	pthread_mutex_unlock(&cache->has_access);
+	pthread_rwlock_unlock(&cache->has_access);
 	return ret;
 }
 
 int cache_delete(Cache* cache, const byte* key, Index key_size) {
 	int ret = -1;
-	pthread_mutex_lock(&cache->has_access);
+	pthread_rwlock_wrlock(&cache->has_access);
 	Index i = find_entry(cache, key, key_size);
 	if(i != KEY_NOT_FOUND) {
 		remove_entry(cache, i);
 		ret = 0;
 	}
-	pthread_mutex_unlock(&cache->has_access);
+	pthread_rwlock_unlock(&cache->has_access);
 	return ret;
 }
 
