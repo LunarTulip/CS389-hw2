@@ -9,7 +9,9 @@
 #include <poll.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <pthread.h>
+#include <cassert>
 
 // using byte = char;
 // using uint = uint32_t;
@@ -50,8 +52,8 @@ struct threadArgs {
 
 volatile bool destroying = false;
 
-// volatile uint32_t threadCount = 0;
-// pthread_mutex_t threadCountMutex;
+volatile uint32_t threadCount = 0;
+pthread_mutex_t threadCountMutex;
 
 Cache _cache;
 Cache *cache = &_cache;
@@ -85,6 +87,10 @@ struct Socket {
 	sockaddr_in address;
 	socklen_t address_size;
 };
+
+Socket tcp_socket;
+Socket udp_socket;
+
 int create_socket(Socket* open_socket, uint p, uint port) {
 	// Creating socket file descriptor
 	uint64 server_fd = socket(AF_INET, p, 0);
@@ -128,10 +134,27 @@ int create_socket(Socket* open_socket, uint p, uint port) {
 	return 0;
 }
 
+uint startSocket(uint16_t portNum, const char* ipAddress) {
+    uint newSocket = socket(AF_INET, SOCK_STREAM, 0);
+    assert(newSocket >= 0 && "Socket creation failed.");
+
+    sockaddr_in serverAddress;
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_port = htons(portNum);
+    int addressSuccess = inet_pton(AF_INET, ipAddress, &serverAddress.sin_addr.s_addr);
+    assert(addressSuccess == 1 && "Socket address set failed.");
+
+    const sockaddr* addressPointer = reinterpret_cast<const sockaddr *>(&serverAddress);
+    int connectionSuccess = connect(newSocket, addressPointer, sizeof(serverAddress));
+    assert(connectionSuccess == 0 && "Socket connection failed.");
+
+    return newSocket;
+}
+
 void* serverThread(void* args) {
-	// pthread_mutex_lock(&threadCountMutex);
-	// threadCount++;
-	// pthread_mutex_unlock(&threadCountMutex);
+	pthread_mutex_lock(&threadCountMutex);
+	threadCount++;
+	pthread_mutex_unlock(&threadCountMutex);
 	
 	threadArgs* argsStruct = static_cast<threadArgs*>(args);
 	uint socket = static_cast<uint>(argsStruct->socket);
@@ -146,6 +169,8 @@ void* serverThread(void* args) {
 	uint message_size = read(socket, message, MAX_MESSAGE_SIZE);
 	const char* response = NULL;
 	uint response_size = 0;
+
+	// printf("---REQUEST:\n%.*s\n---\n", message_size, message);
 
 	if(message_size >= MAX_MESSAGE_SIZE) {
 		response = TOO_LARGE;
@@ -276,8 +301,13 @@ void* serverThread(void* args) {
 					//-----------
 					//BREAKS HERE
 					// printf("%s\n---\n", ACCEPTED);
+					while (threadCount > 1) {}
 					send(socket, ACCEPTED, HEADER_SIZE, 0);
 					destroying = true;
+					close(tcp_socket.file_desc);
+					close(udp_socket.file_desc);
+					destroy_cache(cache);
+					uint socketToBreakMainLoop = startSocket(DEFAULT_PORT, "127.0.0.1");
 					// break;
 					//-----------
 				} else if(match_start(message, message_size, "/memsize/", 9)) {
@@ -308,14 +338,15 @@ void* serverThread(void* args) {
 	}
 
 	// printf("---RESPONSE:\n%d-%.*s\n---\n", response_size - HEADER_SIZE, response_size, response);
+
 	if(!destroying) {
 		send(socket, response, response_size, 0);
 		close(socket);
 	}
 
-	// pthread_mutex_lock(&threadCountMutex);
-	// threadCount--;
-	// pthread_mutex_unlock(&threadCountMutex);
+	pthread_mutex_lock(&threadCountMutex);
+	threadCount--;
+	pthread_mutex_unlock(&threadCountMutex);
 
 	pthread_exit(NULL);
 }
@@ -364,10 +395,10 @@ int main(int argc, char** argv) {
 		}
 	}
 
-	create_cache(cache, max_mem);
+	// Socket tcp_socket;
+	// Socket udp_socket;
 
-	Socket tcp_socket;
-	Socket udp_socket;
+	create_cache(cache, max_mem);
 	if(create_socket(&udp_socket, SOCK_DGRAM, port) != 0) {
 		return -1;
 	}
@@ -627,10 +658,10 @@ int main(int argc, char** argv) {
 	//PROGRAM EXITS HERE
 	//this is the only exit point for the program
 	//release the socket back to the os
-	close(tcp_socket.file_desc);
-	close(udp_socket.file_desc);
+	// close(tcp_socket.file_desc);
+	// close(udp_socket.file_desc);
 	//NOTE: uncomment if program no longer exits here
-	destroy_cache(cache);
+	// destroy_cache(cache);
 	return 0;
 	//-----------------
 }

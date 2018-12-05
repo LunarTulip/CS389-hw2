@@ -287,7 +287,7 @@ int main() {
 		uint j = pow(2, (float)i/2);
 		printf("Starting %d\n", j);
 		bool is_valid = workload(cache, j, 8, 16, 5000);
-		if(!is_valid) break;
+		// if(!is_valid) break;
 		sleep(1);
 	}
 	printf("The highest number of requests per second with under 1ms mean response time was %d.\n", static_cast<uint32_t>(pow(2, static_cast<float>((i-1)/2))));

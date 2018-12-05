@@ -14,3 +14,4 @@ client
 server
 benchmark
 cache_server.hh.gch
+cache_singular.cc
