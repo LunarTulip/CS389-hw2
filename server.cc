@@ -4,30 +4,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <ctype.h>
+// #include <ctype.h>
 #include <time.h>
-#include <poll.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <pthread.h>
-#include <cassert>
+// #include <sys/socket.h>
+// #include <netinet/in.h>
+// #include <arpa/inet.h>
+// #include <pthread.h>
+// #include <cassert>
 
-// using byte = char;
-// using uint = uint32_t;
-// using int8 = uint8_t;
-// using uint8 = uint8_t;
-// using int32 = uint32_t;
-// using uint32 = uint32_t;
-// using int64 = uint64_t;
-// using uint64 = uint64_t;
-
-// template<class t, class x> constexpr inline t cast(x value) {
-// 	return (t)value;
-// }
-// template<class t> inline t* malloc(uint size) {
-// 	return (t*)malloc(sizeof(t)*size);
-// }
 
 constexpr uint DEFAULT_PORT = 33052;
 constexpr uint DEFAULT_MAX_MEMORY = 1<<18;
@@ -155,10 +139,8 @@ void* serverThread(void* args) {
 	pthread_mutex_lock(&threadCountMutex);
 	threadCount++;
 	pthread_mutex_unlock(&threadCountMutex);
-	
-	threadArgs* argsStruct = static_cast<threadArgs*>(args);
-	uint socket = static_cast<uint>(argsStruct->socket);
-	bool is_udp = static_cast<bool>(argsStruct->isUdp);
+
+	uint socket = cast<uint>(args);
 
 	bool is_unset = true;
 	char message_buffer[MAX_MESSAGE_SIZE + 1];
@@ -222,111 +204,106 @@ void* serverThread(void* args) {
 				// printf("memsize requested; is: \"%d\"\n", i);
 			}
 		}
-		if(!is_udp) {
-			if(match_start(message, message_size, "PUT ", 4)) {
-				message = &message[4];
-				message_size -= 4;
-				if(match_start(message, message_size, "/key/", 5)) {
-					message = &message[5];
-					message_size -= 5;
-					auto key = message;
-					uint key_size = get_item_size(key, message_size);
-					message = &message[key_size + 1];
-					message_size -= key_size + 1;
-					auto value = message;
-					uint value_size = get_item_size(value, message_size);
-					if(key_size > 0 and value_size > 0) {
-						key[key_size] = 0;//--<--
-						auto code = cache_set(cache, key, key_size, value, value_size);
-						if(code < 0) {
-							response = TOO_LARGE;
-							response_size = HEADER_SIZE;
-						} else if(code == 0) {
-							is_unset = false;
-							response = CREATED;
-							response_size = HEADER_SIZE;
-						} else {
-							response = ACCEPTED;
-							response_size = HEADER_SIZE;
-						}
-						is_bad_request = false;
-					}
-				}
-			} else if(match_start(message, message_size, "DELETE ", 7)) {
-				message = &message[7];
-				message_size -= 7;
-				if(match_start(message, message_size, "/key/", 5)) {
-					message = &message[5];
-					message_size -= 5;
-					auto key = message;
-					uint key_size = get_item_size(key, message_size);
-
-					key[key_size] = 0;
-
-					if(key_size > 0) {
-						auto code = cache_delete(cache, key, key_size);
-						if(code < 0) {
-							response = NOT_FOUND;
-							response_size = HEADER_SIZE;
-						} else {
-							response = ACCEPTED;
-							response_size = HEADER_SIZE;
-						}
-						is_bad_request = false;
-					}
-				}
-			} else if(match_start(message, message_size, "HEAD ", 5)) {
+		if(match_start(message, message_size, "PUT ", 4)) {
+			message = &message[4];
+			message_size -= 4;
+			if(match_start(message, message_size, "/key/", 5)) {
 				message = &message[5];
 				message_size -= 5;
-				if(match_start(message, message_size, "/key/", 5)) {
-					uint buffer_size = 0;
-					tm tm;
-					auto t = time(0);
-					gmtime_r(&t, &tm);
-					buffer_size += strftime(&buffer[buffer_size], MAX_MESSAGE_SIZE - buffer_size, "Date: %a, %d %b %Y %H:%M:%S %Z\n", &tm);
-					memcpy(&buffer[buffer_size], RESPONSE_TYPE, strlen(RESPONSE_TYPE));
-					buffer_size += strlen(RESPONSE_TYPE);
-					memcpy(&buffer[buffer_size], REQUEST_TYPE, strlen(REQUEST_TYPE));
-
-					response = full_buffer;
-					response_size = buffer_size + HEADER_SIZE;
+				auto key = message;
+				uint key_size = get_item_size(key, message_size);
+				message = &message[key_size + 1];
+				message_size -= key_size + 1;
+				auto value = message;
+				uint value_size = get_item_size(value, message_size);
+				if(key_size > 0 and value_size > 0) {
+					key[key_size] = 0;//--<--
+					auto code = cache_set(cache, key, key_size, value, value_size);
+					if(code < 0) {
+						response = TOO_LARGE;
+						response_size = HEADER_SIZE;
+					} else if(code == 0) {
+						is_unset = false;
+						response = CREATED;
+						response_size = HEADER_SIZE;
+					} else {
+						response = ACCEPTED;
+						response_size = HEADER_SIZE;
+					}
 					is_bad_request = false;
 				}
-			} else if(match_start(message, message_size, "POST ", 5)) {//may break in here
+			}
+		} else if(match_start(message, message_size, "DELETE ", 7)) {
+			message = &message[7];
+			message_size -= 7;
+			if(match_start(message, message_size, "/key/", 5)) {
 				message = &message[5];
 				message_size -= 5;
-				if(match_start(message, message_size, "/shutdown", 9)) {
-					message = &message[9];
-					message_size -= 9;
-					//-----------
-					//BREAKS HERE
-					// printf("%s\n---\n", ACCEPTED);
-					while (threadCount > 1) {}
-					send(socket, ACCEPTED, HEADER_SIZE, 0);
-					destroying = true;
-					close(tcp_socket.file_desc);
-					close(udp_socket.file_desc);
-					destroy_cache(cache);
-					uint socketToBreakMainLoop = startSocket(DEFAULT_PORT, "127.0.0.1");
-					// break;
-					//-----------
-				} else if(match_start(message, message_size, "/memsize/", 9)) {
-					message = &message[9];
-					message_size -= 9;
-					if(message_size >= sizeof(uint)) {
-						uint new_max_mem = *reinterpret_cast<uint*>(message);
-						if(is_unset and new_max_mem > 0 and new_max_mem <= MAX_MAX_MEMORY) {
-							//Resetting the max_mem would be so so easy if it wasn't for the fixed api, now we have to delete the current cache just to reset it. What could have been the least expensive call for the entire server will now most likely be very expensive.
-							destroy_cache(cache);
-							create_cache(cache, new_max_mem);
-							response = ACCEPTED;
-							response_size = HEADER_SIZE;
-						} else {
-							response = NOT_ALLOWED;
-							response_size = HEADER_SIZE;
-						}
-						is_bad_request = false;
+				auto key = message;
+				uint key_size = get_item_size(key, message_size);
+
+				key[key_size] = 0;
+
+				if(key_size > 0) {
+					auto code = cache_delete(cache, key, key_size);
+					if(code < 0) {
+						response = NOT_FOUND;
+						response_size = HEADER_SIZE;
+					} else {
+						response = ACCEPTED;
+						response_size = HEADER_SIZE;
 					}
+					is_bad_request = false;
+				}
+			}
+		} else if(match_start(message, message_size, "HEAD ", 5)) {
+			message = &message[5];
+			message_size -= 5;
+			if(match_start(message, message_size, "/key/", 5)) {
+				uint buffer_size = 0;
+				tm tm;
+				auto t = time(0);
+				gmtime_r(&t, &tm);
+				buffer_size += strftime(&buffer[buffer_size], MAX_MESSAGE_SIZE - buffer_size, "Date: %a, %d %b %Y %H:%M:%S %Z\n", &tm);
+				memcpy(&buffer[buffer_size], RESPONSE_TYPE, strlen(RESPONSE_TYPE));
+				buffer_size += strlen(RESPONSE_TYPE);
+				memcpy(&buffer[buffer_size], REQUEST_TYPE, strlen(REQUEST_TYPE));
+
+				response = full_buffer;
+				response_size = buffer_size + HEADER_SIZE;
+				is_bad_request = false;
+			}
+		} else if(match_start(message, message_size, "POST ", 5)) {//may break in here
+			message = &message[5];
+			message_size -= 5;
+			if(match_start(message, message_size, "/shutdown", 9)) {
+				message = &message[9];
+				message_size -= 9;
+				//-----------
+				//BREAKS HERE
+				// printf("%s\n---\n", ACCEPTED);
+				response = ACCEPTED;
+				response_size = HEADER_SIZE;
+				destroying = true;
+				uint socketToBreakMainLoop = startSocket(DEFAULT_PORT, "127.0.0.1");
+				// break;
+				//-----------
+			} else if(match_start(message, message_size, "/memsize/", 9)) {
+				message = &message[9];
+				message_size -= 9;
+				if(message_size >= sizeof(uint)) {
+					uint new_max_mem = *reinterpret_cast<uint*>(message);
+					if(is_unset and new_max_mem > 0 and new_max_mem <= MAX_MAX_MEMORY) {
+						//Resetting the max_mem would be so so easy if it wasn't for the fixed api, now we have to delete the current cache just to reset it. What could have been the least expensive call for the entire server will now most likely be very expensive.
+						destroy_cache(cache);
+						create_cache(cache, new_max_mem);
+						response = ACCEPTED;
+						response_size = HEADER_SIZE;
+					} else {
+						response = NOT_ALLOWED;
+						response_size = HEADER_SIZE;
+					}
+					is_bad_request = false;
 				}
 			}
 		}
@@ -339,15 +316,12 @@ void* serverThread(void* args) {
 
 	// printf("---RESPONSE:\n%d-%.*s\n---\n", response_size - HEADER_SIZE, response_size, response);
 
-	if(!destroying) {
-		send(socket, response, response_size, 0);
-		close(socket);
-	}
+	send(socket, response, response_size, 0);
+	close(socket);
 
 	pthread_mutex_lock(&threadCountMutex);
 	threadCount--;
 	pthread_mutex_unlock(&threadCountMutex);
-
 	pthread_exit(NULL);
 }
 
@@ -395,271 +369,38 @@ int main(int argc, char** argv) {
 		}
 	}
 
-	// Socket tcp_socket;
-	// Socket udp_socket;
+	Socket tcp_socket;
 
 	create_cache(cache, max_mem);
-	if(create_socket(&udp_socket, SOCK_DGRAM, port) != 0) {
-		return -1;
-	}
 	if(create_socket(&tcp_socket, SOCK_STREAM, port) != 0) {
 		return -1;
 	}
-	uint file_desc_size = 2;
-	pollfd file_descs[2];
-	memset(file_descs, 0, 2*sizeof(pollfd));
-	pollfd* tcp_fd = &file_descs[1];
-	tcp_fd->fd = tcp_socket.file_desc;
-	tcp_fd->events = POLLIN;
-	tcp_fd->revents = 0;
-	pollfd* udp_fd = &file_descs[0];
-	udp_fd->fd = udp_socket.file_desc;
-	udp_fd->events = POLLIN;
-	udp_fd->revents = 0;
 
-
-	// printf("%d\n", max_mem);
-	bool is_unset = true;
-
-	//-----------------------
-	//NOTE: BUFFER OVERFLOW DANGER, all writes to either buffer must be provably safe(can't overflow buffer)
-	// char message_buffer[MAX_MESSAGE_SIZE + 1];
-	// char full_buffer[MAX_MESSAGE_SIZE + HEADER_SIZE + 2*sizeof(uint)];
-	// memcpy(full_buffer, ACCEPTED, HEADER_SIZE);
-	// char* buffer = &full_buffer[HEADER_SIZE];
-	//-----------------------
 
 	uint request_total = 0;
 	while(!destroying) {
 		request_total += 1;
-		Socket open_socket;
-		// printf("starting poll #%d\n", request_total);
-		poll(file_descs, file_desc_size, -1);
-		bool is_udp = false;
-		if(tcp_fd->revents == POLLIN) {
-			open_socket = tcp_socket;
-			// printf("response on tcp");
-		} else if(udp_fd->revents == POLLIN) {
-			open_socket = udp_socket;
-			is_udp = true;
-			// printf("response on udp");
-		} else if(udp_fd->revents == POLLERR) {
-			printf("udp POLLERR\n");
-			return -1;
-		} else if(tcp_fd->revents == POLLERR) {
-			printf("tcp POLLERR\n");
-			return -1;
-		} else if(udp_fd->revents == POLLNVAL) {
-			printf("udp POLLNVAL\n");
-			// create_socket(&udp_socket, SOCK_DGRAM, port);
-			// udp_fd->fd = udp_socket.file_desc;
-			// udp_fd->events = POLLIN;
-			// udp_fd->revents = 0;
-			return -1;
-		} else if(tcp_fd->revents == POLLNVAL) {
-			printf("tcp POLLNVAL\n");
-			return -1;
-		} else if(udp_fd->revents == POLLHUP) {
-			printf("udp POLLHUP\n");
-			return -1;
-		} else if(tcp_fd->revents == POLLHUP) {
-			printf("tcp POLLHUP\n");
-			return -1;
-		} else {
-			printf("Error: tcp was: %d, udp was: %d\n", tcp_fd->revents, udp_fd->revents);
-			return -1;
-		}
-
+		printf("starting poll #%d\n", request_total);
 		uint new_socket = accept(open_socket.file_desc, cast<sockaddr*>(&open_socket.address), &open_socket.address_size);
+
+		if(destroying) {
+			close(new_socket);
+			break;
+		}
 		if(new_socket <= 0) {
 			perror("accept failure");
 			return -1;
 		}
 
 		pthread_t thread;
-		threadArgs* args = new threadArgs{new_socket, is_udp};
-		pthread_create(&thread, NULL, serverThread, static_cast<void*>(args));
-
-		// char* message = new char[MAX_MESSAGE_SIZE + 1];
-		// uint message_size = read(new_socket, message, MAX_MESSAGE_SIZE);
-		// const char* response = NULL;
-		// uint response_size = 0;
-
-		//Pass in socket, get message and response in the thread
-
-		// printf("---REQUEST:\n%.*s\n---\n", message_size, message);
-
-		// if(message_size >= MAX_MESSAGE_SIZE) {
-		// 	response = TOO_LARGE;
-		// 	response_size = HEADER_SIZE;
-		// } else {
-		// 	bool is_bad_request = true;
-		// 	if(match_start(message, message_size, "GET ", 4)) {
-		// 		message = &message[4];
-		// 		message_size -= 4;
-		// 		if(match_start(message, message_size, "/key/", 5)) {
-		// 			message = &message[5];
-		// 			message_size -= 5;
-		// 			auto key = message;
-		// 			uint key_size = get_item_size(key, message_size);
-		// 			if(key_size > 0) {
-		// 				key[key_size] = 0;//--<--
-		// 				uint value_size;
-		// 				auto value = cache_get(cache, key, key_size, &value_size);
-		// 				if(value == NULL) {
-		// 					response = NOT_FOUND;
-		// 					response_size = HEADER_SIZE;
-		// 				} else if(key_size + value_size >= MAX_MESSAGE_SIZE) {//shouldn't be possible
-		// 					response = TOO_LARGE;
-		// 					response_size = HEADER_SIZE;
-		// 				} else {
-		// 					uint buffer_size = 0;
-		// 					write_uint_to(&buffer[buffer_size], key_size);
-		// 					buffer_size += sizeof(uint);
-		// 					memcpy(&buffer[buffer_size], key, key_size);
-		// 					buffer_size += key_size;
-
-		// 					write_uint_to(&buffer[buffer_size], value_size);
-		// 					buffer_size += sizeof(uint);
-		// 					memcpy(&buffer[buffer_size], value, value_size);
-		// 					buffer_size += value_size;
-
-		// 					response = full_buffer;
-		// 					response_size = buffer_size + HEADER_SIZE;
-		// 					// printf("value found; was: \"%.*s\"\n", value_size, (const char*)value);
-		// 				}
-		// 				is_bad_request = false;
-		// 			}
-		// 		} else if(match_start(message, message_size, "/memsize", 8)) {
-		// 			auto i = cache_space_used(cache);
-		// 			write_uint_to(buffer, i);
-		// 			response = full_buffer;
-		// 			response_size = sizeof(uint) + HEADER_SIZE;
-		// 			is_bad_request = false;
-		// 			// printf("memsize requested; is: \"%d\"\n", i);
-		// 		}
-		// 	}
-		// 	if(!is_udp) {
-		// 		if(match_start(message, message_size, "PUT ", 4)) {
-		// 			message = &message[4];
-		// 			message_size -= 4;
-		// 			if(match_start(message, message_size, "/key/", 5)) {
-		// 				message = &message[5];
-		// 				message_size -= 5;
-		// 				auto key = message;
-		// 				uint key_size = get_item_size(key, message_size);
-		// 				message = &message[key_size + 1];
-		// 				message_size -= key_size + 1;
-		// 				auto value = message;
-		// 				uint value_size = get_item_size(value, message_size);
-		// 				if(key_size > 0 and value_size > 0) {
-		// 					key[key_size] = 0;//--<--
-		// 					auto code = cache_set(cache, key, key_size, value, value_size);
-		// 					if(code < 0) {
-		// 						response = TOO_LARGE;
-		// 						response_size = HEADER_SIZE;
-		// 					} else if(code == 0) {
-		// 						is_unset = false;
-		// 						response = CREATED;
-		// 						response_size = HEADER_SIZE;
-		// 					} else {
-		// 						response = ACCEPTED;
-		// 						response_size = HEADER_SIZE;
-		// 					}
-		// 					is_bad_request = false;
-		// 				}
-		// 			}
-		// 		} else if(match_start(message, message_size, "DELETE ", 7)) {
-		// 			message = &message[7];
-		// 			message_size -= 7;
-		// 			if(match_start(message, message_size, "/key/", 5)) {
-		// 				message = &message[5];
-		// 				message_size -= 5;
-		// 				auto key = message;
-		// 				uint key_size = get_item_size(key, message_size);
-
-		// 				key[key_size] = 0;
-
-		// 				if(key_size > 0) {
-		// 					auto code = cache_delete(cache, key, key_size);
-		// 					if(code < 0) {
-		// 						response = NOT_FOUND;
-		// 						response_size = HEADER_SIZE;
-		// 					} else {
-		// 						response = ACCEPTED;
-		// 						response_size = HEADER_SIZE;
-		// 					}
-		// 					is_bad_request = false;
-		// 				}
-		// 			}
-		// 		} else if(match_start(message, message_size, "HEAD ", 5)) {
-		// 			message = &message[5];
-		// 			message_size -= 5;
-		// 			if(match_start(message, message_size, "/key/", 5)) {
-		// 				uint buffer_size = 0;
-		// 				tm tm;
-		// 				auto t = time(0);
-		// 				gmtime_r(&t, &tm);
-		// 				buffer_size += strftime(&buffer[buffer_size], MAX_MESSAGE_SIZE - buffer_size, "Date: %a, %d %b %Y %H:%M:%S %Z\n", &tm);
-		// 				memcpy(&buffer[buffer_size], RESPONSE_TYPE, strlen(RESPONSE_TYPE));
-		// 				buffer_size += strlen(RESPONSE_TYPE);
-		// 				memcpy(&buffer[buffer_size], REQUEST_TYPE, strlen(REQUEST_TYPE));
-
-		// 				response = full_buffer;
-		// 				response_size = buffer_size + HEADER_SIZE;
-		// 				is_bad_request = false;
-		// 			}
-		// 		} else if(match_start(message, message_size, "POST ", 5)) {//may break in here
-		// 			message = &message[5];
-		// 			message_size -= 5;
-		// 			if(match_start(message, message_size, "/shutdown", 9)) {
-		// 				message = &message[9];
-		// 				message_size -= 9;
-		// 				//-----------
-		// 				//BREAKS HERE
-		// 				// printf("%s\n---\n", ACCEPTED);
-		// 				send(new_socket, ACCEPTED, HEADER_SIZE, 0);
-		// 				break;
-		// 				//-----------
-		// 			} else if(match_start(message, message_size, "/memsize/", 9)) {
-		// 				message = &message[9];
-		// 				message_size -= 9;
-		// 				if(message_size >= sizeof(uint)) {
-		// 					uint new_max_mem = *reinterpret_cast<uint*>(message);
-		// 					if(is_unset and new_max_mem > 0 and new_max_mem <= MAX_MAX_MEMORY) {
-		// 						//Resetting the max_mem would be so so easy if it wasn't for the fixed api, now we have to delete the current cache just to reset it. What could have been the least expensive call for the entire server will now most likely be very expensive.
-		// 						destroy_cache(cache);
-		// 						create_cache(cache, new_max_mem);
-		// 						response = ACCEPTED;
-		// 						response_size = HEADER_SIZE;
-		// 					} else {
-		// 						response = NOT_ALLOWED;
-		// 						response_size = HEADER_SIZE;
-		// 					}
-		// 					is_bad_request = false;
-		// 				}
-		// 			}
-		// 		}
-		// 	}
-
-		// 	if(is_bad_request) {
-		// 		response = BAD_REQUEST;
-		// 		response_size = HEADER_SIZE;
-		// 	}
-		// }
-
-		// printf("---RESPONSE:\n%d-%.*s\n---\n", response_size - HEADER_SIZE, response_size, response);
-
-		// send(new_socket, response, response_size, 0);
-		// close(new_socket);
+		pthread_create(&thread, NULL, serverThread, cast<void*>(new_socket));
 	}
-
+	while (threadCount > 0) {}
 	//-----------------
 	//PROGRAM EXITS HERE
 	//this is the only exit point for the program
 	//release the socket back to the os
-	// close(tcp_socket.file_desc);
-	// close(udp_socket.file_desc);
+	close(tcp_socket.file_desc);
 	//NOTE: uncomment if program no longer exits here
 	// destroy_cache(cache);
 	return 0;
