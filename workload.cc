@@ -56,7 +56,7 @@ uint min(uint a, uint b) {
 
 void generate_string(char* buffer, uint size) {
 	for(uint i = 0; i < size - 1; i += 1) {
-		buffer[i] = pcg_random_bound(33, 126);
+		buffer[i] = pcg_random_bound(48, 126);
 	}
 	buffer[size - 1] = 0;
 }
@@ -112,7 +112,7 @@ double get_network_latency(const char* ipAddress, uint16_t portNo, uint32_t iter
 		close(latencyCheckSocket);
 	}
 	clock_t after = clock();
-	
+
 	delete[] tinyMessage;
 
 	return (((double)(after - before))/iterations)/CLOCKS_PER_SEC;
@@ -195,7 +195,7 @@ void* time_set(void* args) {
 // }
 
 bool workload(cache_obj* cache, uint requests_per_second, uint key_size, uint value_size, uint total_requests) {
-	
+
 	char* set_keys[SET_KEY_SIZE] = {};
 
 	double averageLatency = 0; // get_network_latency("127.0.0.1", 33052, 1000);
