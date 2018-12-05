@@ -240,10 +240,6 @@ void create_cache(Cache* cache, Index max_mem) {
 	create_book(&cache->entry_book, get_pages(mem_arena, hash_table_capacity));
 	create_evictor(&cache->evictor);
 	// pthread_mutex_init(&cache->has_access, NULL);
-	printf("final capacity: %d\n", hash_table_capacity);
-	printf("final count:    %d\n", cache->entry_total);
-	printf("final load:     %f\n", cast<double>(cache->entry_total)/hash_table_capacity);
-	printf("final usage:    %d\n", cache->mem_total);
 }
 void destroy_cache(Cache* cache) {
 	const auto hash_table_capacity = cache->hash_table_capacity;
@@ -265,6 +261,10 @@ void destroy_cache(Cache* cache) {
 	free(cache->mem_arena);
 	cache->mem_arena = NULL;
 	entry_book->pages = NULL;
+	printf("final capacity: %d\n", hash_table_capacity);
+	printf("final count:    %d\n", cache->entry_total);
+	printf("final load:     %f\n", cast<double>(cache->entry_total)/hash_table_capacity);
+	printf("final usage:    %d\n", cache->mem_total);
 }
 
 int cache_set(Cache* cache, const byte* key, Index key_size, const byte* value, Index value_size) {
