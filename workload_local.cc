@@ -202,7 +202,7 @@ bool workload(Cache* cache, uint requests_per_second, uint mean_string_size, uin
 // const uint requests_per_second = 3;
 
 constexpr uint INITIAL_I = 1;
-constexpr uint FINAL_I = 32;
+constexpr uint FINAL_I = 16;
 int main() {
 	Cache _cache;
 	Cache* cache = &_cache;

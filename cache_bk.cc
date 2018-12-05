@@ -12,9 +12,24 @@ constexpr Index HIGH_BIT = 1<<(8*sizeof(Index) - 1);
 constexpr Index HASH_MULTIPLIER = 2654435769;
 constexpr char NULL_TERMINATOR = 0;
 
+
+uint64 total_searches = 0;
+uint64 total_path_length = 0;
+uint64 total_worst_case_searches = 0;
+uint64 total_worst_case_path_length = 0;
+uint64 worst_path_length = 0;
+uint64 false_hash_hits = 0;
+uint64 true_hash_hits = 0;
+double total_summed_load = 0;
+double total_worst_case_summed_load = 0;
+uint64 total_added = 0;
+uint64 total_deleted = 0;
+uint64 total_evictions = 0;
+
+
 constexpr inline Index hash(const byte* item, Index size) {
 	//we want to flag entries by setting their key_hash to EMPTY
-	//we need to modify the hash so that it can't equal EMPTY
+	//we need to modify the hash so that it can't equal EMPT
 	//if we don't then everything will break
 	//generates a hash of a c string
 	//We are using David Knuth's multiplicative hash algorithm
@@ -57,18 +72,18 @@ constexpr inline bool is_exceeding_load(Index entry_total, Index hash_table_capa
 }
 
 //instead of storing pointers to our tables, we calculate them jit
-constexpr inline Index* get_hashes   (const byte* mem_arena) {
+constexpr inline Index* get_hashes    (byte* mem_arena) {
 	//hashes is part of the hash table
 	//in order to traverse the hash table, we traverse hashes
 	//the hash marks if an entry is empty, deleted or populated
 	return cast<Index*>(mem_arena);
 }
-constexpr inline Index* get_bookmarks(const byte* mem_arena, Index hash_table_capacity) {
+constexpr inline Index* get_bookmarks (byte* mem_arena, Index hash_table_capacity) {
 	//bookmarks is part of the hash table
 	//it stores the index of the page in the book connected to the hash table entry
 	return cast<Index*>(mem_arena + sizeof(Index)*hash_table_capacity);
 }
-constexpr inline Page*  get_pages    (const byte* mem_arena, Index hash_table_capacity) {
+constexpr inline Page*  get_pages     (byte* mem_arena, Index hash_table_capacity) {
 	//pages stores the primary data structure of Book
 	return cast<Page*>(mem_arena + 2*sizeof(Index)*hash_table_capacity);
 }
@@ -89,8 +104,20 @@ inline byte* allocate(Index hash_table_capacity) {
 	return mem_arena;
 }
 
+void collect_stats(Cache* cache, Index path_length) {
+	total_path_length += path_length;
+	if(path_length > 1) {
+		total_worst_case_searches += 1;
+		total_worst_case_summed_load += cast<double>(cache->entry_total)/(cache->hash_table_capacity);
+		total_worst_case_path_length += path_length;
+		if(worst_path_length < path_length) {
+			worst_path_length = path_length;
+		}
+	}
+}
+
 constexpr Index KEY_NOT_FOUND = -1;
-inline Index find_entry(const Cache* cache, const byte* key, Index key_size) {
+inline Index find_entry(Cache* cache, const byte* key, Index key_size) {
 	//gets the hash table index associated to key
 	const auto hash_table_capacity = cache->hash_table_capacity;
 	const auto key_hashes = get_hashes(cache->mem_arena);
@@ -98,16 +125,23 @@ inline Index find_entry(const Cache* cache, const byte* key, Index key_size) {
 	const auto key_hash = hash(key, key_size);
 	const auto entry_book = &cache->entry_book;
 	//check if key is in cache
+	total_searches += 1;
+	total_summed_load += cast<double>(cache->entry_total)/hash_table_capacity;
 	Index capacity_bitmask = hash_table_capacity - 1;
 	Index expected_i = key_hash&capacity_bitmask;
-	for(;;) {
+	for(Index path_length = 1; path_length <= hash_table_capacity; path_length += 1) {
 		auto cur_key_hash = key_hashes[expected_i];
 		if(cur_key_hash == EMPTY) {
+			collect_stats(cache, path_length);
 			return KEY_NOT_FOUND;
 		} else if(cur_key_hash == key_hash) {
 			Entry* entry = read_book(entry_book, bookmarks[expected_i]);
 			if(is_mem_equal(entry->key, entry->key_size, key, key_size)) {//found key
+				true_hash_hits += 1;
+				collect_stats(cache, path_length);
 				return expected_i;
+			} else {
+				false_hash_hits += 1;
 			}
 		}
 		expected_i = (expected_i + 1)&capacity_bitmask;
@@ -172,6 +206,7 @@ inline void update_mem_size(Cache* cache, Index mem_change) {
 		Index bookmark = get_evict_item(evictor, entry_book);
 		Entry* entry = read_book(entry_book, bookmark);
 		remove_entry(cache, entry->cur_i);
+		total_evictions += 1;
 	}
 }
 inline void grow_cache_size(Cache* cache) {
@@ -239,7 +274,6 @@ void create_cache(Cache* cache, Index max_mem) {
 	cache->mem_arena = mem_arena;
 	create_book(&cache->entry_book, get_pages(mem_arena, hash_table_capacity));
 	create_evictor(&cache->evictor);
-	pthread_mutex_init(&cache->has_access, NULL);
 }
 void destroy_cache(Cache* cache) {
 	const auto hash_table_capacity = cache->hash_table_capacity;
@@ -261,6 +295,22 @@ void destroy_cache(Cache* cache) {
 	free(cache->mem_arena);
 	cache->mem_arena = NULL;
 	entry_book->pages = NULL;
+	printf("total searches:      %ld\n", total_searches);
+	printf("average path length: %f\n", cast<double>(total_path_length)/total_searches);
+	printf("total worst case searches:      %ld\n", total_worst_case_searches);
+	printf("average worst case path length: %f\n", cast<double>(total_worst_case_path_length)/total_worst_case_searches);
+	printf("average load:      %f\n", total_summed_load/total_searches);
+	printf("worst case load:   %f\n", total_worst_case_summed_load/total_worst_case_searches);
+	printf("worst path length: %ld\n", worst_path_length);
+	printf("false hash hits:   %ld\n", false_hash_hits);
+	printf("true hash hits:    %ld\n", true_hash_hits);
+	printf("total added:     %ld\n", total_added);
+	printf("total deleted:   %ld\n", total_deleted);
+	printf("total evictions: %ld\n", total_evictions);
+	printf("final capacity: %d\n", hash_table_capacity);
+	printf("final count:    %d\n", cache->entry_total);
+	printf("final load:     %f\n", cast<double>(cache->entry_total)/hash_table_capacity);
+	printf("final usage:    %d\n", cache->mem_total);
 }
 
 int cache_set(Cache* cache, const byte* key, Index key_size, const byte* value, Index value_size) {
@@ -278,19 +328,20 @@ int cache_set(Cache* cache, const byte* key, Index key_size, const byte* value, 
 	const auto key_hash = hash(key, key_size);
 
 	//check if key is in cache
+	total_searches += 1;
+	total_summed_load += cast<double>(cache->entry_total)/hash_table_capacity;
 	Index capacity_bitmask = hash_table_capacity - 1;
 	Index expected_i = key_hash&capacity_bitmask;
-
-	pthread_mutex_lock(&cache->has_access);
-
-	for(;;) {
+	for(Index path_length = 1; path_length <= hash_table_capacity; path_length += 1) {
 		auto cur_key_hash = key_hashes[expected_i];
 		if(cur_key_hash == EMPTY) {
+			collect_stats(cache, path_length);
 			break;
 		} else if(cur_key_hash == key_hash) {
 			auto bookmark = bookmarks[expected_i];
 			Entry* entry = read_book(entry_book, bookmark);
 			if(is_mem_equal(entry->key, entry->key_size, key, key_size)) {//found key
+				true_hash_hits += 1;
 				update_mem_size(cache, value_size - entry->value_size);
 				//delete previous value and add new value
 				if(entry->value_size >= value_size) {
@@ -307,12 +358,16 @@ int cache_set(Cache* cache, const byte* key, Index key_size, const byte* value, 
 				}
 				entry->value_size = value_size;
 				touch_evict_item(evictor, bookmark, &entry->evict_item, entry_book);
+				collect_stats(cache, path_length);
 				return 1;
+			} else {
+				false_hash_hits += 1;
 			}
 		}
 		expected_i = (expected_i + 1)&capacity_bitmask;
 	}
 	Index new_i = expected_i;
+	total_added += 1;
 
 	//add key at new_i
 	byte* key_copy = malloc<byte>(key_size + value_size);
@@ -341,7 +396,6 @@ int cache_set(Cache* cache, const byte* key, Index key_size, const byte* value, 
 	if(is_exceeding_load(cache->entry_total, hash_table_capacity)) {
 		grow_cache_size(cache);
 	}
-	pthread_mutex_unlock(&cache->has_access);
 	return 0;
 }
 
@@ -350,32 +404,27 @@ const byte* cache_get(Cache* cache, const byte* key, Index key_size, Index* ret_
 	const auto entry_book = &cache->entry_book;
 	const auto evictor = &cache->evictor;
 
-	const byte* ret = NULL;
-	pthread_mutex_lock(&cache->has_access);
 	Index i = find_entry(cache, key, key_size);
 	if(i == KEY_NOT_FOUND) {
+		return NULL;
 	} else {
 		auto bookmark = bookmarks[i];
 		Entry* entry = read_book(entry_book, bookmark);
 		//let the evictor know this value was accessed
 		touch_evict_item(evictor, bookmark, &entry->evict_item, entry_book);
 		*ret_value_size = entry->value_size;
-		ret = cast<byte*>(entry->value);
+		return cast<byte*>(entry->value);
 	}
-	pthread_mutex_unlock(&cache->has_access);
-	return ret;
 }
 
 int cache_delete(Cache* cache, const byte* key, Index key_size) {
-	int ret = -1;
-	pthread_mutex_lock(&cache->has_access);
 	Index i = find_entry(cache, key, key_size);
 	if(i != KEY_NOT_FOUND) {
+		total_deleted += 1;
 		remove_entry(cache, i);
-		ret = 0;
+		return 0;
 	}
-	pthread_mutex_unlock(&cache->has_access);
-	return ret;
+	return -1;
 }
 
 Index cache_space_used(Cache* cache) {

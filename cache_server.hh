@@ -5,6 +5,7 @@
  */
 #ifndef CACHES_H
 #define CACHES_H
+#include <pthread.h>
 #include "types.hh"
 
 
@@ -15,6 +16,7 @@ struct Cache {//Definition of Cache
 	Index hash_table_capacity;
 	Index entry_total;
 	byte* mem_arena;//joint allocation of: {hash_table {Index* key_hashes, Bookmark* bookmarks}, Page* pages, void* evict_data}; these fields have functions for retrieving them
+	pthread_mutex_t has_access;
 	Book entry_book;
 	Evictor evictor;
 };
