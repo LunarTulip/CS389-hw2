@@ -3,7 +3,7 @@
 #define TYPES_H
 #include <stdlib.h>
 #include <inttypes.h>
-// #include <pthread.h>
+#include <pthread.h>
 
 using byte = char;
 using uint = uint32_t;
