@@ -2,7 +2,7 @@
 CPP = g++-7
 
 hw6server:
-	$(CPP) -O3 types.hh book.hh cache_server.hh cache.cc server.cc -lpthread -o server -g;
+	$(CPP) -O3 types.hh book.hh cache_server.hh cache.cc server.cc -lpthread -o server;
 	./server;
 
 hw6benchmark:
