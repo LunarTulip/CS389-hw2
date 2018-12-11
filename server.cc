@@ -15,7 +15,7 @@
 
 constexpr uint DEFAULT_PORT = 33052;
 constexpr uint DEFAULT_MAX_MEMORY = 1<<18;
-constexpr uint MAX_MESSAGE_SIZE = 1<<12;
+constexpr uint MAX_MESSAGE_SIZE = 1<<10;
 constexpr uint HIGH_BIT = 1<<(8*sizeof(uint) - 1);
 constexpr uint MAX_MAX_MEMORY = ~HIGH_BIT;
 
@@ -150,7 +150,7 @@ void* serverThread(void* args) {
 	char* buffer = &full_buffer[HEADER_SIZE];
 	char* message = message_buffer;
 
-	int message_size = recv(socket, message, MAX_MESSAGE_SIZE, 0);
+	int message_size = recv(socket, message, MAX_MESSAGE_SIZE, MSG_WAITALL);
 
 	const char* response = NULL;
 	uint response_size = 0;
