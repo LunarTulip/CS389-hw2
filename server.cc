@@ -160,7 +160,7 @@ void* serverThread(void* args) {
 		pthread_mutex_lock(&threadCountMutex);
 		threadCount--;
 		pthread_mutex_unlock(&threadCountMutex);
-		// pthread_exit(NULL);
+		pthread_exit(NULL);
 		return 0;
 	}
 
@@ -337,7 +337,7 @@ void* serverThread(void* args) {
 	pthread_mutex_lock(&threadCountMutex);
 	threadCount--;
 	pthread_mutex_unlock(&threadCountMutex);
-	// pthread_exit(NULL);
+	pthread_exit(NULL);
 	return 0;
 }
 
