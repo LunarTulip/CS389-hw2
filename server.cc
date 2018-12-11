@@ -153,6 +153,7 @@ void* serverThread(void* args) {
 	const char* response = NULL;
 	uint response_size = 0;
 	if(message_size < 0) {
+		printf("failure to read\n");
 		close(socket);
 		pthread_mutex_lock(&threadCountMutex);
 		threadCount--;
