@@ -327,8 +327,12 @@ void* serverThread(void* args) {
 
 	printf("---RESPONSE:\n%d-%.*s\n---\n", response_size - HEADER_SIZE, response_size, response);
 
-	send(socket, response, response_size, 0);
-	close(socket);
+	if(send(socket, response, response_size, 0) < 0) {
+		printf("failure to send socket\n");
+	}
+	if(close(socket) < 0) {
+		printf("failure to close socket\n");
+	}
 
 	pthread_mutex_lock(&threadCountMutex);
 	threadCount--;
