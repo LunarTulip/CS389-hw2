@@ -136,11 +136,12 @@ uint startSocket(uint16_t portNum, const char* ipAddress) {
 }
 
 void* serverThread(void* args) {
+	printf("---RESPONDING\n");
 	pthread_mutex_lock(&threadCountMutex);
 	threadCount++;
 	pthread_mutex_unlock(&threadCountMutex);
 
-	uint32 socket = static_cast<uint32>(reinterpret_cast<uint64>(args));
+	int32 socket = reinterpret_cast<int32>(reinterpret_cast<uint64>(args));
 
 	bool is_unset = true;
 	char message_buffer[MAX_MESSAGE_SIZE + 1];
@@ -281,7 +282,6 @@ void* serverThread(void* args) {
 				message_size -= 9;
 				//-----------
 				//BREAKS HERE
-				// printf("%s\n---\n", ACCEPTED);
 				response = ACCEPTED;
 				response_size = HEADER_SIZE;
 				destroying = true;
@@ -314,7 +314,7 @@ void* serverThread(void* args) {
 		}
 	}
 
-	// printf("---RESPONSE:\n%d-%.*s\n---\n", response_size - HEADER_SIZE, response_size, response);
+	printf("---RESPONSE:\n%d-%.*s\n---\n", response_size - HEADER_SIZE, response_size, response);
 
 	send(socket, response, response_size, 0);
 	close(socket);
@@ -380,20 +380,21 @@ int main(int argc, char** argv) {
 	while(!destroying) {
 		request_total += 1;
 		printf("starting poll #%d\n", request_total);
-		uint32 new_socket = accept(tcp_socket.file_desc, cast<sockaddr*>(&tcp_socket.address), &tcp_socket.address_size);
+		int32 new_socket = accept(tcp_socket.file_desc, cast<sockaddr*>(&tcp_socket.address), &tcp_socket.address_size);
 
 		if(destroying) {
 			close(new_socket);
 			break;
 		}
 		if(new_socket <= 0) {
-			perror("accept failure");
+			printf("accept failure");
 			return -1;
 		}
 
 		pthread_t thread;
 		if(pthread_create(&thread, NULL, serverThread, reinterpret_cast<void*>(new_socket)) < 0) {
 			printf("failure to create thread\n");
+			return -1;
 		}
 	}
 	while (threadCount > 0) {}
