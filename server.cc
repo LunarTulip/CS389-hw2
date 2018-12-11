@@ -75,9 +75,9 @@ struct Socket {
 Socket tcp_socket;
 Socket udp_socket;
 
-int create_socket(Socket* open_socket, uint p, uint port) {
+int create_socket(Socket* open_socket, uint protocol, uint port) {
 	// Creating socket file descriptor
-	uint64 server_fd = socket(AF_INET, p, 0);
+	uint64 server_fd = socket(AF_INET, protocol, 0);
 	if(server_fd == 0) {
 		printf("failed to create socket\n");
 		return -1;
@@ -381,6 +381,7 @@ int main(int argc, char** argv) {
 		request_total += 1;
 		printf("starting poll #%d\n", request_total);
 		int32 new_socket = accept(tcp_socket.file_desc, cast<sockaddr*>(&tcp_socket.address), &tcp_socket.address_size);
+		printf("threadCount: #%d\n", threadCount);
 
 		if(destroying) {
 			close(new_socket);
@@ -388,13 +389,13 @@ int main(int argc, char** argv) {
 		}
 		if(new_socket <= 0) {
 			printf("accept failure");
-			return -1;
+			break;
 		}
 
 		pthread_t thread;
 		if(pthread_create(&thread, NULL, serverThread, reinterpret_cast<void*>(new_socket)) < 0) {
 			printf("failure to create thread\n");
-			return -1;
+			break;
 		}
 	}
 	while (threadCount > 0) {}
