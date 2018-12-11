@@ -159,7 +159,7 @@ void* serverThread(void* args) {
 		threadCount--;
 		pthread_mutex_unlock(&threadCountMutex);
 		// pthread_exit(NULL);
-		return;
+		return 0;
 	}
 
 	// printf("---REQUEST:\n%.*s\n---\n", message_size, message);
@@ -332,6 +332,7 @@ void* serverThread(void* args) {
 	threadCount--;
 	pthread_mutex_unlock(&threadCountMutex);
 	// pthread_exit(NULL);
+	return 0;
 }
 
 int main(int argc, char** argv) {
