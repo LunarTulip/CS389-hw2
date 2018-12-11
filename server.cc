@@ -369,13 +369,12 @@ int main(int argc, char** argv) {
 		}
 	}
 
-	Socket tcp_socket;
-
 	create_cache(cache, max_mem);
+
+	Socket tcp_socket;
 	if(create_socket(&tcp_socket, SOCK_STREAM, port) != 0) {
 		return -1;
 	}
-
 
 	uint request_total = 0;
 	while(!destroying) {
@@ -393,7 +392,9 @@ int main(int argc, char** argv) {
 		}
 
 		pthread_t thread;
-		pthread_create(&thread, NULL, serverThread, cast<void*>(new_socket));
+		if(pthread_create(&thread, NULL, serverThread, cast<void*>(new_socket)) < 0) {
+			printf("failure to create thread\n");
+		}
 	}
 	while (threadCount > 0) {}
 	//-----------------
