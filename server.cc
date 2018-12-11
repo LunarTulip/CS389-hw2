@@ -141,7 +141,7 @@ void* serverThread(void* args) {
 	threadCount++;
 	pthread_mutex_unlock(&threadCountMutex);
 
-	int32 socket = reinterpret_cast<int32>(reinterpret_cast<uint64>(args));
+	int32 socket = static_cast<int32>(reinterpret_cast<int64>(args));
 
 	bool is_unset = true;
 	char message_buffer[MAX_MESSAGE_SIZE + 1];
