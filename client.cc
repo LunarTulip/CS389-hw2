@@ -18,7 +18,7 @@ struct cache_obj {
 };
 
 uint16_t PORTNUM = 33052;
-const char* IPADDRESS = "127.0.0.1";
+const char* IPADDRESS = "134.10.103.231";
 
 char* makeHttpRequest(const char* method, const char* uriBase, const char* key, val_type value, index_type valLength, index_type* overallRequestLength) {
     uint32_t beforeKeyLength = strlen(method) + strlen(uriBase) + 2; //Add 2 for the " /" between the method and the URI
@@ -99,7 +99,7 @@ char* readMessage(char* sourceBuffer, int sourceBufferLength) {
         messageStart++;
     }
 
-    char* messageStr = new char[sourceBufferLength - messageStart]; //This produces a compiler error given -O3, but everything is still fine
+    char* messageStr = new char[sourceBufferLength - messageStart]; //This produces a compiler warning given -O3, but everything is still fine
     for (int i = 0; i < (sourceBufferLength - messageStart); i++) {
         messageStr[i] = sourceBuffer[i + messageStart];
     }
@@ -121,6 +121,27 @@ char* parseMessageForGet(char* message, index_type* valSize) {
 
 socketType start_socket(int commType, uint16_t portNum, const char* ipAddress) {
     socketType newSocket = socket(AF_INET, commType, 0);
+    if (newSocket < 0) {
+        if (errno == EACCES) {
+            printf("EACCES\n");
+        } else if (errno == EMFILE) {
+            printf("EMFILE\n");
+        } else if (errno == ENFILE) {
+            printf("ENFILE\n");
+        } else if (errno == ENOBUFS) {
+            printf("ENOBUFS\n");
+        } else if (errno == ENOMEM) {
+            printf("ENOMEM\n");
+        } else if (errno == EAFNOSUPPORT) {
+            printf("EAFNOSUPPORT\n");
+        } else if (errno == EINVAL) {
+            printf("EINVAL\n");
+        } else if (errno == EPROTONOSUPPORT) {
+            printf("EPROTONOSUPPORT\n");
+        } else {
+            printf("%d\n", errno);
+        }
+    }
     assert(newSocket >= 0 && "Socket creation failed.");
 
     sockaddr_in serverAddress;
@@ -151,10 +172,12 @@ int cache_set(cache_type cache, key_type key, val_type val, index_type val_size)
 
     index_type setRequestSize = 0;
     char* setRequest = makeHttpRequest("PUT", "key", key, val, val_size, &setRequestSize);
-    send(setSocket, setRequest, setRequestSize, 0);
+    // std::cout << "size: " << setRequestSize << "; request: " << setRequest << "\n";
+    int sendSuccess = send(setSocket, setRequest, setRequestSize, 0);
+    assert(sendSuccess >= 0 && "Failed to send set request.");
 
     char* serverReadBuffer = new char[1024];
-    int serverReadLength = read(setSocket, serverReadBuffer, 1024);
+    int serverReadLength = recv(setSocket, serverReadBuffer, 1024, MSG_WAITALL);
     assert(serverReadLength >= 0 && "Failed to read from server.");
 
     int setSuccess = handleStatusCode(serverReadBuffer, serverReadLength);
@@ -170,11 +193,12 @@ val_type cache_get(cache_type cache, key_type key, index_type *val_size) {
 
     index_type getRequestSize = 0;
     char* getRequest = makeHttpRequest("GET", "key", key, NULL, 0, &getRequestSize);
+    // std::cout << "size: " << getRequestSize << "; request: " << getRequest << "\n";
     int sendSuccess = send(getSocket, getRequest, getRequestSize, 0);
-    assert(sendSuccess >= 0 && "Failed to send space used request.");
+    assert(sendSuccess >= 0 && "Failed to send get request.");
 
     char* serverReadBuffer = new char[1024];
-    int serverReadLength = read(getSocket, serverReadBuffer, 1024);
+    int serverReadLength = recv(getSocket, serverReadBuffer, 1024, MSG_WAITALL);
     assert(serverReadLength >= 0 && "Failed to read from server.");
 
     int getSuccess = handleStatusCode(serverReadBuffer, serverReadLength);
@@ -198,11 +222,11 @@ int cache_delete(cache_type cache, key_type key) {
 
     index_type deleteRequestSize = 0;
     char*deleteRequest = makeHttpRequest("DELETE", "key", key, NULL, 0, &deleteRequestSize);
-    int sendSuccess = send(deleteSocket, deleteRequest, deleteRequestSize, 0);
+    int sendSuccess = send(deleteSocket, deleteRequest, deleteRequestSize, MSG_WAITALL);
     assert(sendSuccess >= 0 && "Failed to send delete request.");
 
     char* serverReadBuffer = new char[1024];
-    int serverReadLength = read(deleteSocket, serverReadBuffer, 1024);
+    int serverReadLength = recv(deleteSocket, serverReadBuffer, 1024, MSG_WAITALL);
     assert(serverReadLength >= 0 && "Failed to read from server.");
 
     int deleteSuccess = handleStatusCode(serverReadBuffer, serverReadLength);
@@ -222,7 +246,7 @@ index_type cache_space_used(cache_type cache){
     assert(sendSuccess >= 0 && "Failed to send space used request.");
 
     char*serverReadBuffer = new char[1024];
-    int serverReadLength = read(spaceUsedSocket, serverReadBuffer, 1024);
+    int serverReadLength = recv(spaceUsedSocket, serverReadBuffer, 1024, 0);
     assert(serverReadLength >= 0 && "Failed to read from server.");
 
     int spaceUsedSuccess = handleStatusCode(serverReadBuffer, serverReadLength);

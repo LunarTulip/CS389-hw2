@@ -16,6 +16,7 @@
 using uint = unsigned int;
 
 constexpr double PI = 3.14159265358979323846;
+constexpr uint32_t THREADPOOLSIZE = 1000;
 
 pthread_mutex_t requestTimeMutex;
 volatile clock_t totalRequestTime = 0;
@@ -210,7 +211,7 @@ bool workload(cache_obj* cache, uint requests_per_second, uint key_size, uint va
 
 	uint overflow = 0;
 
-	pthread_t* threads = new pthread_t[total_requests];
+	pthread_t* threads = new pthread_t[THREADPOOLSIZE];
 	pthread_attr_t joinable;
 	pthread_attr_init(&joinable);
 	pthread_attr_setdetachstate(&joinable, PTHREAD_CREATE_JOINABLE);
@@ -234,7 +235,10 @@ bool workload(cache_obj* cache, uint requests_per_second, uint key_size, uint va
 			}
 
 			requestArgs* args = new requestArgs{cache, key, NULL, 0};
-			pthread_create(&(threads[i]), &joinable, time_get, static_cast<void*>(args));
+			if (i >= THREADPOOLSIZE) {
+				pthread_join(threads[i % THREADPOOLSIZE], &status);
+			}
+			pthread_create(&(threads[i % THREADPOOLSIZE]), &joinable, time_get, static_cast<void*>(args));
 		} else {//SET
 			char* key = new char[key_size];
 			generate_string(key, key_size);
@@ -245,7 +249,10 @@ bool workload(cache_obj* cache, uint requests_per_second, uint key_size, uint va
 			generate_string(value, value_size);
 
 			requestArgs* args = new requestArgs{cache, key, value, value_size};
-			pthread_create(&(threads[i]), &joinable, time_set, static_cast<void*>(args));
+			if (i >= THREADPOOLSIZE) {
+				pthread_join(threads[i % THREADPOOLSIZE], &status);
+			}
+			pthread_create(&(threads[i % THREADPOOLSIZE]), &joinable, time_set, static_cast<void*>(args));
 		}
 
 		cur_sleep_time = clock();
@@ -259,7 +266,7 @@ bool workload(cache_obj* cache, uint requests_per_second, uint key_size, uint va
 			overflow += 1;
 		}
  	}
-	for (uint32_t i = 0; i < total_requests; i++) {
+	for (uint32_t i = 0; i < THREADPOOLSIZE; i++) {
 		pthread_join(threads[i], &status);
 	}
 
@@ -286,7 +293,7 @@ int main() {
 	for(;; i += 1) {
 		uint j = pow(2, (float)i/2);
 		printf("Starting %d\n", j);
-		bool is_valid = workload(cache, j, 8, 16, 5000);
+		bool is_valid = workload(cache, j, 8, 16, 500);
 		// if(!is_valid) break;
 		sleep(1);
 	}
