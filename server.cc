@@ -105,7 +105,7 @@ int create_socket(Socket* open_socket, uint protocol, uint port) {
 		printf("failed to bind socket\n");
 		return -1;
 	}
-	if(p != SOCK_DGRAM) {
+	if(protocol != SOCK_DGRAM) {
 		error_code = listen(server_fd, 3);
 		if(error_code < 0) {
 			printf("failed to listen\n");
