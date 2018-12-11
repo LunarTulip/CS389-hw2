@@ -4,13 +4,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-// #include <ctype.h>
+#include <cassert>
+#include <ctype.h>
 #include <time.h>
-// #include <sys/socket.h>
-// #include <netinet/in.h>
-// #include <arpa/inet.h>
-// #include <pthread.h>
-// #include <cassert>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <pthread.h>
 
 
 constexpr uint DEFAULT_PORT = 33052;
@@ -140,7 +140,7 @@ void* serverThread(void* args) {
 	threadCount++;
 	pthread_mutex_unlock(&threadCountMutex);
 
-	uint socket = cast<uint>(args);
+	uint32 socket = static_cast<uint32>(reinterpret_cast<uint64>(args));
 
 	bool is_unset = true;
 	char message_buffer[MAX_MESSAGE_SIZE + 1];
@@ -380,7 +380,7 @@ int main(int argc, char** argv) {
 	while(!destroying) {
 		request_total += 1;
 		printf("starting poll #%d\n", request_total);
-		uint new_socket = accept(open_socket.file_desc, cast<sockaddr*>(&open_socket.address), &open_socket.address_size);
+		uint32 new_socket = accept(tcp_socket.file_desc, cast<sockaddr*>(&tcp_socket.address), &tcp_socket.address_size);
 
 		if(destroying) {
 			close(new_socket);
@@ -392,7 +392,7 @@ int main(int argc, char** argv) {
 		}
 
 		pthread_t thread;
-		if(pthread_create(&thread, NULL, serverThread, cast<void*>(new_socket)) < 0) {
+		if(pthread_create(&thread, NULL, serverThread, reinterpret_cast<void*>(new_socket)) < 0) {
 			printf("failure to create thread\n");
 		}
 	}
