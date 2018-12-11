@@ -162,7 +162,7 @@ void* serverThread(void* args) {
 		return 0;
 	}
 
-	printf("---REQUEST:\n%.*s\n---\n", message_size, message);
+	printf("---REQUEST: %d\n%.*s\n---\n", message_size, message_size, message);
 
 	if(message_size >= MAX_MESSAGE_SIZE) {
 		response = TOO_LARGE;
