@@ -150,7 +150,7 @@ void* serverThread(void* args) {
 	char* buffer = &full_buffer[HEADER_SIZE];
 	char* message = message_buffer;
 
-	int message_size = read(socket, message, MAX_MESSAGE_SIZE);
+	int message_size = recv(socket, message, MAX_MESSAGE_SIZE, MSG_WAITALL);
 
 	const char* response = NULL;
 	uint response_size = 0;
