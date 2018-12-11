@@ -136,7 +136,7 @@ uint startSocket(uint16_t portNum, const char* ipAddress) {
 }
 
 void* serverThread(void* args) {
-	printf("---RESPONDING\n");
+	// printf("---RESPONDING\n");
 	pthread_mutex_lock(&threadCountMutex);
 	threadCount++;
 	pthread_mutex_unlock(&threadCountMutex);
