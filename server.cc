@@ -149,9 +149,16 @@ void* serverThread(void* args) {
 	memcpy(full_buffer, ACCEPTED, HEADER_SIZE);
 	char* buffer = &full_buffer[HEADER_SIZE];
 	char* message = message_buffer;
-	uint message_size = read(socket, message, MAX_MESSAGE_SIZE);
+	int message_size = read(socket, message, MAX_MESSAGE_SIZE);
 	const char* response = NULL;
 	uint response_size = 0;
+	if(message_size < 0) {
+		close(socket);
+		pthread_mutex_lock(&threadCountMutex);
+		threadCount--;
+		pthread_mutex_unlock(&threadCountMutex);
+		pthread_exit(NULL);
+	}
 
 	// printf("---REQUEST:\n%.*s\n---\n", message_size, message);
 
