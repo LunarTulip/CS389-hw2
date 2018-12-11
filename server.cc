@@ -77,8 +77,8 @@ Socket udp_socket;
 
 int create_socket(Socket* open_socket, uint protocol, uint port) {
 	// Creating socket file descriptor
-	uint64 server_fd = socket(AF_INET, protocol, 0);
-	if(server_fd == 0) {
+	int64 server_fd = socket(AF_INET, protocol, 0);
+	if(server_fd <= 0) {
 		printf("failed to create socket\n");
 		return -1;
 	}
@@ -114,7 +114,7 @@ int create_socket(Socket* open_socket, uint protocol, uint port) {
 	}
 	open_socket->file_desc = server_fd;
 	open_socket->address = address_in;
-	open_socket->address_size = sizeof(address_in);
+	open_socket->address_size = sizeof(sockaddr_in);
 	return 0;
 }
 
@@ -149,7 +149,9 @@ void* serverThread(void* args) {
 	memcpy(full_buffer, ACCEPTED, HEADER_SIZE);
 	char* buffer = &full_buffer[HEADER_SIZE];
 	char* message = message_buffer;
+
 	int message_size = read(socket, message, MAX_MESSAGE_SIZE);
+
 	const char* response = NULL;
 	uint response_size = 0;
 	if(message_size < 0) {
@@ -390,7 +392,8 @@ int main(int argc, char** argv) {
 	while(!destroying) {
 		request_total += 1;
 		printf("starting poll #%d\n", request_total);
-		int32 new_socket = accept(tcp_socket.file_desc, cast<sockaddr*>(&tcp_socket.address), &tcp_socket.address_size);
+		sockaddr_in client;
+		int32 new_socket = accept(tcp_socket.file_desc, NULL, NULL);
 		printf("threadCount: #%d\n", threadCount);
 
 		if(destroying) {
