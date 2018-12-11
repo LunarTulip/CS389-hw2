@@ -158,7 +158,8 @@ void* serverThread(void* args) {
 		pthread_mutex_lock(&threadCountMutex);
 		threadCount--;
 		pthread_mutex_unlock(&threadCountMutex);
-		pthread_exit(NULL);
+		// pthread_exit(NULL);
+		return;
 	}
 
 	// printf("---REQUEST:\n%.*s\n---\n", message_size, message);
@@ -330,7 +331,7 @@ void* serverThread(void* args) {
 	pthread_mutex_lock(&threadCountMutex);
 	threadCount--;
 	pthread_mutex_unlock(&threadCountMutex);
-	pthread_exit(NULL);
+	// pthread_exit(NULL);
 }
 
 int main(int argc, char** argv) {
@@ -401,10 +402,11 @@ int main(int argc, char** argv) {
 		}
 
 		pthread_t thread;
-		if(pthread_create(&thread, NULL, serverThread, reinterpret_cast<void*>(new_socket)) != 0) {
-			printf("failure to create thread\n");
-			break;
-		}
+		// if(pthread_create(&thread, NULL, serverThread, reinterpret_cast<void*>(new_socket)) != 0) {
+		// 	printf("failure to create thread\n");
+		// 	break;
+		// }
+		serverThread(reinterpret_cast<void*>(new_socket));
 	}
 	while (threadCount > 0) {}
 	//-----------------
