@@ -1,5 +1,5 @@
 
-CPP = g++-7
+CPP = g++-7 -Wall -Wextra -pedantic
 
 hw6server:
 	$(CPP) -O3 types.hh book.hh cache_server.hh cache.cc server.cc -lpthread -o server;

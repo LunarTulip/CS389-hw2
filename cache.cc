@@ -10,7 +10,6 @@ constexpr Index INIT_HASH_TABLE_CAPACITY = 1<<7;//must be a power of 2
 constexpr Index EMPTY = 0;
 constexpr Index HIGH_BIT = 1<<(8*sizeof(Index) - 1);
 constexpr Index HASH_MULTIPLIER = 2654435769;
-constexpr char NULL_TERMINATOR = 0;
 
 constexpr inline Index hash(const byte* item, Index size) {
 	//we want to flag entries by setting their key_hash to EMPTY
