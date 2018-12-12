@@ -19,15 +19,15 @@ constexpr uint MAX_MESSAGE_SIZE = 1<<10;
 constexpr uint HIGH_BIT = 1<<(8*sizeof(uint) - 1);
 constexpr uint MAX_MAX_MEMORY = ~HIGH_BIT;
 
-const char* ACCEPTED    = "HTTP/1.1 200\n\n";
-const char* CREATED     = "HTTP/1.1 201\n\n";
-const char* BAD_REQUEST = "HTTP/1.1 400\n\n";
-const char* TOO_LARGE   = "HTTP/1.1 413\n\n";
-const char* NOT_ALLOWED = "HTTP/1.1 405\n\n";
-const char* NOT_FOUND   = "HTTP/1.1 404\n\n";
-const uint HEADER_SIZE = strlen(ACCEPTED);
-const char* REQUEST_TYPE = "Content-Type: text/plain\n";
-const char* RESPONSE_TYPE = "Accept: text/plain\n";
+constexpr const char* ACCEPTED    = "HTTP/1.1 200\n\n";
+constexpr const char* CREATED     = "HTTP/1.1 201\n\n";
+constexpr const char* BAD_REQUEST = "HTTP/1.1 400\n\n";
+constexpr const char* TOO_LARGE   = "HTTP/1.1 413\n\n";
+constexpr const char* NOT_ALLOWED = "HTTP/1.1 405\n\n";
+constexpr const char* NOT_FOUND   = "HTTP/1.1 404\n\n";
+constexpr uint HEADER_SIZE = strlen(ACCEPTED);
+constexpr const char* REQUEST_TYPE = "Content-Type: text/plain\n";
+constexpr const char* RESPONSE_TYPE = "Accept: text/plain\n";
 
 struct threadArgs {
 	uint socket;
@@ -119,7 +119,7 @@ int create_socket(Socket* open_socket, uint protocol, uint port) {
 }
 
 uint startSocket(uint16_t portNum, const char* ipAddress) {
-    uint newSocket = socket(AF_INET, SOCK_STREAM, 0);
+    int newSocket = socket(AF_INET, SOCK_STREAM, 0);
     assert(newSocket >= 0 && "Socket creation failed.");
 
     sockaddr_in serverAddress;
@@ -299,6 +299,7 @@ void* serverThread(void* args) {
 				response_size = HEADER_SIZE;
 				destroying = true;
 				uint socketToBreakMainLoop = startSocket(DEFAULT_PORT, "127.0.0.1");
+				close(socketToBreakMainLoop);
 				// break;
 				//-----------
 			} else if(match_start(message, message_size, "/memsize/", 9)) {
@@ -399,7 +400,6 @@ int main(int argc, char** argv) {
 	while(!destroying) {
 		request_total += 1;
 		// printf("starting poll #%d #%d\n", request_total, threadCount);
-		sockaddr_in client;
 		while (threadCount > 1000) {}//prevent more than 1000 file descriptors from being openned at one time
 		int32 new_socket = accept(tcp_socket.file_desc, NULL, NULL);
 		// printf("threadCount: #%d\n", threadCount);
