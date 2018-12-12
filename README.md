@@ -1,74 +1,49 @@
 # Computer Systems Homework 5 (by Alyssa Riceman and Monica Moniot)
 
-## 1: State Goals and Define System
+Over the course of this assignment we performed a series of optimizations, as well as restructurings of our code to allow us to better measure its performance or otherwise improve comprehensibility. Sadly, we couldn't get a profiler such as perf or gprof working, so we were forced to rely on code-internal measurements, which worked to some extent for as long as our server was single-threaded but broke down somewhat once it became multithreaded. Thus we have minimal hard quantitative measurements.
 
-We decided to keep our goals very simple: just measuring the average response time of our cache under various circumstances.
+Our overall change in throughput was larger than we can measure; as of our changes, the server remains stably under 1ms in response time even when requests are sent literally as quickly as our CPUs can manage. Thus we don't have an exact measurement, but we know that it was a *very substantial* improvement.
 
-We defined our system as being comprised of our client and server programs, the hardware on which they run, and the network through which they communicate.
+## Optimization 1: Refactored header and code
+We switched the cache over to using character arrays instead of c-strings, and the cache header was changed to allow for the creation of the cache structure anywhere in memory. Custom types for keys and values were also removed for clarity. These changes made it significantly easier to implement our subsequent optimizations.
 
-## 2: List Services and Outcomes
+## Optimization 2: Baked LRU (Effect not measured)
+LRU was made the cache's standard eviction policy and all others were removed. The program no longer does any last-minute decision-making to decide which eviction policy to use. The entire eviction handler code was simplified and condensed into a single file.
 
-We listed off three services performed by the cache server, each with an array of possible outcomes.
+## Metric Improvement 1: Added cache debug metrics
+Added numerous internal metrics on the agorithmic performance of the cache,including but not limited to average hashtable traversal length, total false hash matches, worst case path length, and total deleted entries.
 
-* Service 1: send HTML responses to HTML requests
-    * Outcome 1: the response is correct
-    * Outcome 2: the response is incorrect
-    * Outcome 3: no respone is sent
-* Service 2: save user-input data for retrieval
-    * Outcome 1: data is successfully saved in a retrievable fashion
-    * Outcome 2: data is saved irretrievably or not saved at all
-* Service 3: destroy itself when, and only when, given the command to do so
-    * Outcome 1: on request, server successfully destroys itself
-    * Outcome 2: on request, server fails to destroy itself
-    * Outcome 3: server destroys itself despite a lack of request to do so
+## Optimization 3: Fixed hash function (Noticeable improvement to performance)
+We immediately noticed with the debug information that the cache was getting a large number of hash collisions between different keys. This was bad because our cache relies on the key hashes, not only to distribute entries in the hash-table, but also to quickly determine if two keys are equal, since if they have different hashes, they can't be equal. We dramatically improved our default hash function simply by changing its order of operation, and false hash matches dropped to 0, meaning the cache never noticed two different keys with the same hash.
 
-## 3: Select Metrics
+## Optimization 4: Implemented fast modulus (Minor improvement to performance)
+Since the cache's hash-table grows in powers of two, we were able implement modulus by the hash table's size as a bitmask in place of using modulo.
 
-We chose to focus exclusively on sustained throughput, defined as the highest messages-per-second rate at which average response time remains below 1 second.
+## Optimization 5: Tried linear traversal instead of double hashing (Unnoticeable)
+The cache originally used double hashing for its traversal pattern, but we tried switching it over to using linear traversal. Surprisingly, the change made little to no difference in performance. Since linear traversal is simplier, has better multithreading characteristics, and has better algorithmic characteristics in general, we chose to continue using it anyway.
 
-## 4: List Parameters
+## Metric Improvement 2: Created custom local workload
+We made a copy of the workload code we were using and redesigned it to interact locally with the cache, bypassing the network. This gave us much less noisy performance measurements. We retested double hashing and a couple of other optimizations and recomfirmed our original measurements.
 
-Here are the parameters of interest that we came up with:
+## Optimization 6: Implemented proper delete (Sizable improvement to memory usage)
+The cache origninally used lazy deletion (marking entries as deleted instead of actually removing them from the table), resulting in a large number of deleted entries pilling up in the hash-table. Since we now use linear traversal, and there is an aglorithm for proper deletion in a linear hash-table, we implemented that and found we got precisely the same performance using a quarter the memory we previously were using.
 
-* Number of requests per second
-* Average key size
-* Variance in key size
-* Average value size
-* Variance in value size
-* Network speed
-* Network overhead
-* Processor speed
-* Processor overhead
-* Ratios of different input types (read:write, write:delete, read:delete, et cetera)
-* Maximum cache size
+## Optimization 7: Switched from SOA to AOS (Negative effect on performance)
+The cache originally organized the hash-table as a pair of arrays respectively storing key-hashes and pointers to the full table entry in each (Struct of Arrays format). We switched it to use a single array storing the key-hashes and pointers contiguously (Array of Structs format). We found that, after this change, worst-case performance was twice as bad. Thus we chose not to keep it, and restored the cache to Struct of Arrays format.
 
-## 5: Select Factors to Study
+## Optimization 8: Reduced client memory allocations (Small improvement to memory usage)
+Originally, the client would allocate a 2kb chunk of memory to the heap into which to read the server's responses to its requests. The server, however, had a maximum return size of 1kb; so we cut the client's server-reading buffer down to 1kb accordingly, thereby saving a small amount of memory for each client function waiting on a server read at a given time. The effect was small, since the client rarely has very many requests running in parallel.
 
-We settled on three parameters to treat as factors of interest and use as the independent variables in our experiment, each with specific gradations of magnitude as recommended by the text.
+## Optimization 9: Allocated keys and values together (Unnoticeable)
+The cache originally allocated keys and values separately, but this was unnecessary, and so we switched to jointly allocating them in a contiguous block of memory. Due to this and several previous changes, a typical get request will have exactly four cache-line misses: one to fetch the key hash, one to fetch the entry pointer, one to fetch the entry, and once to fetch the key and value. This is an improvement over the previous version, whose average miss count was slightly higher.
 
-* Factor 1: number of requests per second
-    * Level 1: 2^4
-    * Higher levels: 2^5, 2^6, et cetera, increasing until we get a mean time over 1ms
-* Factor 3: network speed
-    * Level 1: network is localhost
-    * Level 2: network is some non-localhost network
+## Optimization 10: Multithreading
+We implemented threading of our server, as well as improving the process by which our benchmarking program did its own threading.
 
-## 6: Select Evaluation Technique
+The server now, whenever it receives a socket connection, spins off a new thread to handle that socket connection, reading in whatever is sent over it and returning a response, before exiting to avoid clogging up the system's thread count.
 
-Measurement seems like clearly the best option for us, since we have the client and server programs conveniently available and we don't need to worry about inconveniencing our day-to-day users with traffic from our tests since we don't have any day-to-day users.
+Unfortunately, implementing threading made it significantly harder to use any of our metrics, because most of them were recorded within the cache, and with threading in place race conditions become a concern. Thus, for the most part, we were forced to rely entirely on our benchmark's own timing mechanisms, which itself required some changes to its clock in order to continue working. However, we believe the multithreaded server is now functional.
 
-## 7: Select Workload
+Unfortunately, with the limited metrics now available to us, it's difficult to distinguish truly-good results from noise. Thus, although we *believe* the multithread server to be a performance improvement, we're not *sure* of that. Notably, however, it lacks whatever flaw plagued our HW5; we're able to throw arbitrarily long chains of rapid inputs at the server, and it will continue to return in under 1ms rather than eventually being overwhelmed; we ran our benchmark on it (on localhost) for over half an hour to test.
 
-To ensure similarity to the ETC workload described in [this paper](https://www.researchgate.net/publication/254461663_Workload_analysis_of_a_large-scale_key-value_store), we chose to comprise our workload of 65% GET requests, 5% SET requests, and 30% DELETE requests. We chose to order these requests randomly relative to each other, on the basis that we lack any specific expected use-case to simulate and randommess seemed like a solid default in absence of reasons to choose otherwise.
-
-## 8: Design Experiment
-
-[WORK IN PROGRESS]
-
-## 9: Analyze and Interpret Data
-
-[ANALYSIS GOES HERE]
-
-## 10: Present Results
-
-[PRESENTATION GOES HERE]
+(Over the network, however; it continues to be sufficiently bogged down by fluctuations in ping over the course of tests that we're unable to get any reliable data; the network noise far outpaces our latency-testing function's abiltiy to account for it, and so while we believe that its performance is more-or-less comparably stable we haven't verified its status as such to nearly the same extent.)
