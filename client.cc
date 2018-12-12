@@ -18,7 +18,7 @@ struct cache_obj {
 };
 
 uint16_t PORTNUM = 33052;
-const char* IPADDRESS = "134.10.103.231";
+const char* IPADDRESS = "127.0.0.1";
 
 char* makeHttpRequest(const char* method, const char* uriBase, const char* key, val_type value, index_type valLength, index_type* overallRequestLength) {
     uint32_t beforeKeyLength = strlen(method) + strlen(uriBase) + 2; //Add 2 for the " /" between the method and the URI

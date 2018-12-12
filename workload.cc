@@ -16,7 +16,7 @@
 using uint = unsigned int;
 
 constexpr double PI = 3.14159265358979323846;
-constexpr uint32_t THREADPOOLSIZE = 1000;
+constexpr uint32_t THREADPOOLSIZE = 1;
 
 pthread_mutex_t requestTimeMutex;
 volatile clock_t totalRequestTime = 0;
@@ -143,7 +143,7 @@ void* time_get(void* args) {
 		delete[] static_cast<const char*>(value);
 	}
 
-	pthread_exit(NULL);
+	// pthread_exit(NULL);
 }
 
 void* time_set(void* args) {
@@ -168,7 +168,7 @@ void* time_set(void* args) {
 	delete[] static_cast<const char*>(argsAsStruct->value);
 	delete argsAsStruct;
 
-	pthread_exit(NULL);
+	// pthread_exit(NULL);
 }
 
 // void* time_delete(void* args) {
@@ -235,10 +235,11 @@ bool workload(cache_obj* cache, uint requests_per_second, uint key_size, uint va
 			}
 
 			requestArgs* args = new requestArgs{cache, key, NULL, 0};
-			if (i >= THREADPOOLSIZE) {
-				pthread_join(threads[i % THREADPOOLSIZE], &status);
-			}
-			pthread_create(&(threads[i % THREADPOOLSIZE]), &joinable, time_get, static_cast<void*>(args));
+			time_get(static_cast<void*>(args));
+			// if (i >= THREADPOOLSIZE) {
+			// 	pthread_join(threads[i % THREADPOOLSIZE], &status);
+			// }
+			// pthread_create(&(threads[i % THREADPOOLSIZE]), &joinable, time_get, static_cast<void*>(args));
 		} else {//SET
 			char* key = new char[key_size];
 			generate_string(key, key_size);
@@ -249,10 +250,11 @@ bool workload(cache_obj* cache, uint requests_per_second, uint key_size, uint va
 			generate_string(value, value_size);
 
 			requestArgs* args = new requestArgs{cache, key, value, value_size};
-			if (i >= THREADPOOLSIZE) {
-				pthread_join(threads[i % THREADPOOLSIZE], &status);
-			}
-			pthread_create(&(threads[i % THREADPOOLSIZE]), &joinable, time_set, static_cast<void*>(args));
+			time_set(static_cast<void*>(args));
+			// if (i >= THREADPOOLSIZE) {
+			// 	pthread_join(threads[i % THREADPOOLSIZE], &status);
+			// }
+			// pthread_create(&(threads[i % THREADPOOLSIZE]), &joinable, time_set, static_cast<void*>(args));
 		}
 
 		cur_sleep_time = clock();
@@ -266,9 +268,9 @@ bool workload(cache_obj* cache, uint requests_per_second, uint key_size, uint va
 			overflow += 1;
 		}
  	}
-	for (uint32_t i = 0; i < THREADPOOLSIZE; i++) {
-		pthread_join(threads[i], &status);
-	}
+	// for (uint32_t i = 0; i < THREADPOOLSIZE; i++) {
+	// 	pthread_join(threads[i], &status);
+	// }
 
 	double average_time = ((((double)(totalRequestTime))/CLOCKS_PER_SEC)/total_requests) - averageLatency;
 	bool is_valid = average_time < .001;
@@ -293,9 +295,9 @@ int main() {
 	for(;; i += 1) {
 		uint j = pow(2, (float)i/2);
 		printf("Starting %d\n", j);
-		bool is_valid = workload(cache, j, 8, 16, 500);
+		bool is_valid = workload(cache, j, 8, 16, 5000);
 		// if(!is_valid) break;
-		sleep(1);
+		// sleep(1);
 	}
 	printf("The highest number of requests per second with under 1ms mean response time was %d.\n", static_cast<uint32_t>(pow(2, static_cast<float>((i-1)/2))));
 	destroy_cache(cache);
