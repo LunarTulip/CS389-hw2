@@ -17,7 +17,7 @@
 using uint = unsigned int;
 
 constexpr double PI = 3.14159265358979323846;
-constexpr uint32_t THREADPOOLSIZE = 8;
+constexpr uint32_t THREADPOOLSIZE = 7;
 
 pthread_mutex_t requestTimeMutex;
 volatile double totalRequestTime = 0;
