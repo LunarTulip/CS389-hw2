@@ -139,7 +139,7 @@ void* serverThread(void* args) {
 	// printf("---RESPONDING\n");
 	pthread_mutex_lock(&threadCountMutex);
 	threadCount++;
-	printf("answer #%d\n", threadCount);
+	// printf("answer #%d\n", threadCount);
 	pthread_mutex_unlock(&threadCountMutex);
 
 	int32 socket = static_cast<int32>(reinterpret_cast<int64>(args));
@@ -160,7 +160,7 @@ void* serverThread(void* args) {
 		close(socket);
 		pthread_mutex_lock(&threadCountMutex);
 		threadCount--;
-		printf("fin #%d\n", threadCount);
+		// printf("fin #%d\n", threadCount);
 		pthread_mutex_unlock(&threadCountMutex);
 		pthread_exit(NULL);
 		// return 0;
@@ -338,7 +338,7 @@ void* serverThread(void* args) {
 
 	pthread_mutex_lock(&threadCountMutex);
 	threadCount--;
-	printf("fin #%d\n", threadCount);
+	// printf("fin #%d\n", threadCount);
 	pthread_mutex_unlock(&threadCountMutex);
 	pthread_exit(NULL);
 	// return 0;
@@ -416,20 +416,10 @@ int main(int argc, char** argv) {
 		pthread_t thread;
 		auto error_code = pthread_create(&thread, NULL, serverThread, reinterpret_cast<void*>(new_socket));
 		if(error_code != 0) {
-			printf("failure to create thread %d\n", error_code);
-			// switch(error_code) {
-			// 	case EAGAIN: {
-			// 		printf("EAGAIN\n");
-			// 	} break;
-			// 	case EINVAL: {
-			// 		printf("EINVAL\n");
-			// 	} break;
-			// 	case EPERM: {
-			// 		printf("EPERM\n");
-			// 	} break;
-			// }
+			printf("failure to create thread, errorno: %d\n", error_code);
 			break;
 		}
+		pthread_detach(thread);
 		// serverThread(reinterpret_cast<void*>(new_socket));
 	}
 	while (threadCount > 0) {}
