@@ -160,7 +160,7 @@ void* serverThread(void* args) {
 		pthread_mutex_lock(&threadCountMutex);
 		threadCount--;
 		pthread_mutex_unlock(&threadCountMutex);
-		// pthread_exit(NULL);
+		pthread_exit(NULL);
 		return 0;
 	}
 
@@ -337,7 +337,7 @@ void* serverThread(void* args) {
 	pthread_mutex_lock(&threadCountMutex);
 	threadCount--;
 	pthread_mutex_unlock(&threadCountMutex);
-	// pthread_exit(NULL);
+	pthread_exit(NULL);
 	return 0;
 }
 
@@ -395,7 +395,7 @@ int main(int argc, char** argv) {
 	uint request_total = 0;
 	while(!destroying) {
 		request_total += 1;
-		printf("starting poll #%d #%d\n", request_total, threadCount);
+		// printf("starting poll #%d #%d\n", request_total, threadCount);
 		sockaddr_in client;
 		while (threadCount > 1000) {}//prevent more than 1000 file descriptors from being openned at one time
 		int32 new_socket = accept(tcp_socket.file_desc, NULL, NULL);
@@ -411,11 +411,11 @@ int main(int argc, char** argv) {
 		}
 
 		pthread_t thread;
-		// if(pthread_create(&thread, NULL, serverThread, reinterpret_cast<void*>(new_socket)) != 0) {
-		// 	printf("failure to create thread\n");
-		// 	break;
-		// }
-		serverThread(reinterpret_cast<void*>(new_socket));
+		if(pthread_create(&thread, NULL, serverThread, reinterpret_cast<void*>(new_socket)) != 0) {
+			printf("failure to create thread\n");
+			break;
+		}
+		// serverThread(reinterpret_cast<void*>(new_socket));
 	}
 	while (threadCount > 0) {}
 	//-----------------
