@@ -397,6 +397,7 @@ int main(int argc, char** argv) {
 		request_total += 1;
 		printf("starting poll #%d #%d\n", request_total, threadCount);
 		sockaddr_in client;
+		while (threadCount > 1000) {}
 		int32 new_socket = accept(tcp_socket.file_desc, NULL, NULL);
 		printf("threadCount: #%d\n", threadCount);
 
