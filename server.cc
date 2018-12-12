@@ -413,18 +413,18 @@ int main(int argc, char** argv) {
 		pthread_t thread;
 		auto error_code = pthread_create(&thread, NULL, serverThread, reinterpret_cast<void*>(new_socket));
 		if(error_code != 0) {
-			printf("failure to create thread\n");
-			switch (error_code) {
-				case EAGAIN: {
-					printf("EAGAIN\n");
-				} break;
-				case EINVAL: {
-					printf("EINVAL\n");
-				} break;
-				case EPERM: {
-					printf("EPERM\n");
-				} break;
-			}
+			printf("failure to create thread %d\n", error_code);
+			// switch(error_code) {
+			// 	case EAGAIN: {
+			// 		printf("EAGAIN\n");
+			// 	} break;
+			// 	case EINVAL: {
+			// 		printf("EINVAL\n");
+			// 	} break;
+			// 	case EPERM: {
+			// 		printf("EPERM\n");
+			// 	} break;
+			// }
 			break;
 		}
 		// serverThread(reinterpret_cast<void*>(new_socket));
