@@ -10,16 +10,17 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <cassert>
+#include <time.h>
 #include "cache.h"
 #include "random.hh"
 
 using uint = unsigned int;
 
 constexpr double PI = 3.14159265358979323846;
-constexpr uint32_t THREADPOOLSIZE = 1;
+constexpr uint32_t THREADPOOLSIZE = 8;
 
 pthread_mutex_t requestTimeMutex;
-volatile clock_t totalRequestTime = 0;
+volatile double totalRequestTime = 0;
 
 // pthread_mutex_t threadCountMutex;
 // volatile uint32_t threadNo = 1;
@@ -80,6 +81,12 @@ char* get_string_or_null(char** strings, uint strings_size) {
 // constexpr uint MAX_STRING_SIZE = 500;
 constexpr uint SET_KEY_SIZE = 100;
 
+double timeInSeconds(struct timespec start, struct timespec stop) {
+    double starttime = start.tv_sec + (start.tv_nsec / 1000000000.);
+    double endtime = stop.tv_sec + (stop.tv_nsec / 1000000000.);
+    return (endtime - starttime);
+}
+
 double get_network_latency(const char* ipAddress, uint16_t portNo, uint32_t iterations) {
 
 	char* tinyMessage = new char[3];
@@ -89,7 +96,9 @@ double get_network_latency(const char* ipAddress, uint16_t portNo, uint32_t iter
 
 	char serverReply[64];
 
-	clock_t before = clock();
+	struct timespec before, after;
+
+	clock_gettime(CLOCK_MONOTONIC, &before);
 	for(uint i = 0; i < iterations; i += 1) {
 		int latencyCheckSocket = socket(AF_INET, SOCK_STREAM, 0);
 		assert(latencyCheckSocket >= 0 && "Socket creation failed in latency check.");
@@ -112,29 +121,30 @@ double get_network_latency(const char* ipAddress, uint16_t portNo, uint32_t iter
 
 		close(latencyCheckSocket);
 	}
-	clock_t after = clock();
+	clock_gettime(CLOCK_MONOTONIC, &after);
 
 	delete[] tinyMessage;
 
-	return (((double)(after - before))/iterations)/CLOCKS_PER_SEC;
+	return timeInSeconds(before, after)/iterations;
 }
 
 void* time_get(void* args) {
 	requestArgs* argsAsStruct = static_cast<requestArgs*>(args);
-	clock_t before = 0;
-	clock_t after = 0;
+	struct timespec before, after;
 
-	before = clock();
+	clock_gettime(CLOCK_MONOTONIC, &before);
 	const void* value = cache_get(argsAsStruct->cache, argsAsStruct->key, &(argsAsStruct->valueSize));
-	after = clock();
+	clock_gettime(CLOCK_MONOTONIC, &after);
 
 	// pthread_mutex_lock(&threadCountMutex);
 	// printf("Timed thread #%d\n", threadNo);
 	// threadNo++;
 	// pthread_mutex_unlock(&threadCountMutex);
 
+	double iterationTime = timeInSeconds(before, after);
+
 	pthread_mutex_lock(&requestTimeMutex);
-	totalRequestTime += (after - before);
+	totalRequestTime += iterationTime;
 	pthread_mutex_unlock(&requestTimeMutex);
 
 	delete[] argsAsStruct->key;
@@ -143,32 +153,33 @@ void* time_get(void* args) {
 		delete[] static_cast<const char*>(value);
 	}
 
-	// pthread_exit(NULL);
+	pthread_exit(NULL);
 }
 
 void* time_set(void* args) {
 	requestArgs* argsAsStruct = static_cast<requestArgs*>(args);
-	clock_t before = 0;
-	clock_t after = 0;
+	struct timespec before, after;
 
-	before = clock();
+	clock_gettime(CLOCK_MONOTONIC, &before);
 	cache_set(argsAsStruct->cache, argsAsStruct->key, argsAsStruct->value, argsAsStruct->valueSize);
-	after = clock();
+	clock_gettime(CLOCK_MONOTONIC, &after);
 
 	// pthread_mutex_lock(&threadCountMutex);
 	// printf("Timed thread #%d\n", threadNo);
 	// threadNo++;
 	// pthread_mutex_unlock(&threadCountMutex);
 
+	double iterationTime = timeInSeconds(before, after);
+
 	pthread_mutex_lock(&requestTimeMutex);
-	totalRequestTime += (after - before);
+	totalRequestTime += iterationTime;
 	pthread_mutex_unlock(&requestTimeMutex);
 
 	delete[] argsAsStruct->key;
 	delete[] static_cast<const char*>(argsAsStruct->value);
 	delete argsAsStruct;
 
-	// pthread_exit(NULL);
+	pthread_exit(NULL);
 }
 
 // void* time_delete(void* args) {
@@ -235,11 +246,11 @@ bool workload(cache_obj* cache, uint requests_per_second, uint key_size, uint va
 			}
 
 			requestArgs* args = new requestArgs{cache, key, NULL, 0};
-			time_get(static_cast<void*>(args));
-			// if (i >= THREADPOOLSIZE) {
-			// 	pthread_join(threads[i % THREADPOOLSIZE], &status);
-			// }
-			// pthread_create(&(threads[i % THREADPOOLSIZE]), &joinable, time_get, static_cast<void*>(args));
+			// time_get(static_cast<void*>(args));
+			if (i >= THREADPOOLSIZE) {
+				pthread_join(threads[i % THREADPOOLSIZE], &status);
+			}
+			pthread_create(&(threads[i % THREADPOOLSIZE]), &joinable, time_get, static_cast<void*>(args));
 		} else {//SET
 			char* key = new char[key_size];
 			generate_string(key, key_size);
@@ -250,11 +261,11 @@ bool workload(cache_obj* cache, uint requests_per_second, uint key_size, uint va
 			generate_string(value, value_size);
 
 			requestArgs* args = new requestArgs{cache, key, value, value_size};
-			time_set(static_cast<void*>(args));
-			// if (i >= THREADPOOLSIZE) {
-			// 	pthread_join(threads[i % THREADPOOLSIZE], &status);
-			// }
-			// pthread_create(&(threads[i % THREADPOOLSIZE]), &joinable, time_set, static_cast<void*>(args));
+			// time_set(static_cast<void*>(args));
+			if (i >= THREADPOOLSIZE) {
+				pthread_join(threads[i % THREADPOOLSIZE], &status);
+			}
+			pthread_create(&(threads[i % THREADPOOLSIZE]), &joinable, time_set, static_cast<void*>(args));
 		}
 
 		cur_sleep_time = clock();
@@ -268,11 +279,11 @@ bool workload(cache_obj* cache, uint requests_per_second, uint key_size, uint va
 			overflow += 1;
 		}
  	}
-	// for (uint32_t i = 0; i < THREADPOOLSIZE; i++) {
-	// 	pthread_join(threads[i], &status);
-	// }
+	for (uint32_t i = 0; i < THREADPOOLSIZE; i++) {
+		pthread_join(threads[i], &status);
+	}
 
-	double average_time = ((((double)(totalRequestTime))/CLOCKS_PER_SEC)/total_requests) - averageLatency;
+	double average_time = ((totalRequestTime)/total_requests) - averageLatency;
 	bool is_valid = average_time < .001;
 
 	printf("Average time: %fms\n", 1e3*average_time);

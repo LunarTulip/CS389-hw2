@@ -164,7 +164,7 @@ void* serverThread(void* args) {
 		return 0;
 	}
 
-	printf("---REQUEST: %d\n%.*s\n---\n", message_size, message_size, message);
+	// printf("---REQUEST: %d\n%.*s\n---\n", message_size, message_size, message);
 
 	if(message_size >= MAX_MESSAGE_SIZE) {
 		response = TOO_LARGE;
@@ -325,7 +325,7 @@ void* serverThread(void* args) {
 		}
 	}
 
-	printf("---RESPONSE:\n%d-%.*s\n---\n", response_size - HEADER_SIZE, response_size, response);
+	// printf("---RESPONSE:\n%d-%.*s\n---\n", response_size - HEADER_SIZE, response_size, response);
 
 	if(send(socket, response, response_size, 0) < 0) {
 		printf("failure to send socket\n");
@@ -399,7 +399,7 @@ int main(int argc, char** argv) {
 		sockaddr_in client;
 		while (threadCount > 1000) {}//prevent more than 1000 file descriptors from being openned at one time
 		int32 new_socket = accept(tcp_socket.file_desc, NULL, NULL);
-		printf("threadCount: #%d\n", threadCount);
+		// printf("threadCount: #%d\n", threadCount);
 
 		if(destroying) {
 			close(new_socket);
