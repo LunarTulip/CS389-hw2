@@ -139,6 +139,7 @@ void* serverThread(void* args) {
 	// printf("---RESPONDING\n");
 	pthread_mutex_lock(&threadCountMutex);
 	threadCount++;
+	printf("answer #%d\n", threadCount);
 	pthread_mutex_unlock(&threadCountMutex);
 
 	int32 socket = static_cast<int32>(reinterpret_cast<int64>(args));
