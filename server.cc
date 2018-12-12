@@ -160,6 +160,7 @@ void* serverThread(void* args) {
 		close(socket);
 		pthread_mutex_lock(&threadCountMutex);
 		threadCount--;
+		printf("fin #%d\n", threadCount);
 		pthread_mutex_unlock(&threadCountMutex);
 		pthread_exit(NULL);
 		return 0;
@@ -337,6 +338,7 @@ void* serverThread(void* args) {
 
 	pthread_mutex_lock(&threadCountMutex);
 	threadCount--;
+	printf("fin #%d\n", threadCount);
 	pthread_mutex_unlock(&threadCountMutex);
 	pthread_exit(NULL);
 	return 0;
